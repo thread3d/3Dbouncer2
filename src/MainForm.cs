@@ -74,49 +74,36 @@ public partial class MainForm : Form
     }
 
     /// <summary>
-    /// Initializes the SplitContainer with side panel for UI controls.
+    /// Initializes the side panel for UI controls using simple Panel (no SplitContainer).
+    /// GLControl is added directly to form to avoid OpenGL context issues.
     /// </summary>
     private void InitializeSplitContainer()
     {
-        // Create SplitContainer
-        _splitContainer = new SplitContainer
-        {
-            Orientation = Orientation.Vertical,
-            Dock = DockStyle.Fill,
-            FixedPanel = FixedPanel.Panel1,
-            IsSplitterFixed = true
-        };
-
-        // Set panel widths
-        _splitContainer.Panel1MinSize = 0;
-        _splitContainer.SplitterDistance = ExpandedPanelWidth;
-
-        // Create side panel with auto-scroll
+        // Create side panel docked to left
         _sidePanel = new Panel
         {
             AutoScroll = true,
-            Dock = DockStyle.Fill,
-            BackColor = Color.FromArgb(40, 40, 40)
+            Dock = DockStyle.Left,
+            Width = ExpandedPanelWidth,
+            BackColor = Color.FromArgb(40, 40, 40),
+            Padding = new Padding(10)
         };
-        _splitContainer.Panel1.Controls.Add(_sidePanel);
+        Controls.Add(_sidePanel);
 
-        // Create collapse button (placed on form, not side panel)
+        // Create collapse button docked to left (inside side panel)
         _collapseButton = new Button
         {
             Text = "<",
             Width = 25,
             Height = 25,
-            Location = new Point(ExpandedPanelWidth - 30, 5),
+            Dock = DockStyle.Right,
             FlatStyle = FlatStyle.Flat,
             ForeColor = Color.White,
             BackColor = Color.FromArgb(60, 60, 60)
         };
         _collapseButton.FlatAppearance.BorderSize = 0;
         _collapseButton.Click += OnCollapseButtonClick;
-
-        // Add controls to form: splitter first, then collapse button on top
-        Controls.Add(_splitContainer);
-        Controls.Add(_collapseButton);
+        _sidePanel.Controls.Add(_collapseButton);
         _collapseButton.BringToFront();
     }
 
@@ -303,17 +290,15 @@ public partial class MainForm : Form
 
         if (_isPanelCollapsed)
         {
-            // Collapse: hide panel, move button to left edge
-            _splitContainer.Panel1Collapsed = true;
+            // Collapse: hide panel by setting width to 0, keep button visible
+            _sidePanel.Width = 25;
             _collapseButton.Text = ">";
-            _collapseButton.Left = 5;
         }
         else
         {
-            // Expand: show panel, move button inside panel
-            _splitContainer.Panel1Collapsed = false;
+            // Expand: restore panel width
+            _sidePanel.Width = ExpandedPanelWidth;
             _collapseButton.Text = "<";
-            _collapseButton.Left = ExpandedPanelWidth - 30;
         }
     }
 
@@ -409,10 +394,10 @@ public partial class MainForm : Form
         _glControl = new GLControl(settings);
         _glControl.Dock = DockStyle.Fill;
 
-        // Add GLControl to Panel2 (right side) of SplitContainer
-        _splitContainer.Panel2.Controls.Add(_glControl);
-        _splitContainer.Panel2.Controls.SetChildIndex(_glControl, 0);
-        _glControl.BringToFront();
+        // Add GLControl to form directly (simpler layout, no SplitContainer issues)
+        // Add it first so it's behind the side panel in z-order
+        Controls.Add(_glControl);
+        Controls.SetChildIndex(_glControl, Controls.Count - 1);
 
         // Initialize GLHost with proper lifecycle management
         _glHost = new GLHost();
