@@ -34,13 +34,18 @@ public class GLHost
     private int _width = 800;
     private int _height = 600;
 
-    // Particle system
+    // Particle system - Instanced rendering with SSBO
     private int _particleShaderProgram = 0;
-    private int _particleVBO = 0;
-    private int _particleVAO = 0;
+    private int _particleSSBO = 0;       // Shader Storage Buffer Object for particle data
+    private int _quadVBO = 0;            // Base quad mesh (4 vertices)
+    private int _quadVAO = 0;
     private int _particleCount = 0;
     private float _particleSize = 4.0f;
-    private int _pointSizeUniformLocation = -1;
+    private int _particleSizeUniformLocation = -1;
+    private int _mvpUniformLocation = -1;
+
+    // Camera
+    private Camera _camera = null!;
 
     /// <summary>
     /// Initializes the GLHost with the specified GLControl.
@@ -96,6 +101,10 @@ public class GLHost
         // Initialize particle shaders and buffers
         InitializeParticleShaders();
         InitializeParticleBuffers();
+
+        // Initialize camera
+        _camera = new Camera(_width, _height);
+        _viewMatrix = _camera.GetViewMatrix();
 
         // Start the game loop
         Application.Idle += OnApplicationIdle;
@@ -245,72 +254,76 @@ public class GLHost
         GL.DeleteShader(vertexShader);
         GL.DeleteShader(fragmentShader);
 
-        _pointSizeUniformLocation = GL.GetUniformLocation(_particleShaderProgram, "uPointSize");
+        _mvpUniformLocation = GL.GetUniformLocation(_particleShaderProgram, "mvp");
+        _particleSizeUniformLocation = GL.GetUniformLocation(_particleShaderProgram, "uParticleSize");
     }
 
     /// <summary>
-    /// Creates the particle VAO/VBO for instanced rendering.
+    /// Creates the base quad mesh and SSBO for instanced rendering.
+    /// Uses a single triangle strip with 4 vertices for each particle instance.
     /// </summary>
     private void InitializeParticleBuffers()
     {
-        _particleVAO = GL.GenVertexArray();
-        _particleVBO = GL.GenBuffer();
+        // Create base quad mesh (4 vertices for triangle strip: BL, BR, TL, TR)
+        // This quad is instanced for each particle
+        float[] quadVertices = {
+            -0.5f, -0.5f,  // bottom-left (0)
+             0.5f, -0.5f,  // bottom-right (1)
+            -0.5f,  0.5f,  // top-left (2)
+             0.5f,  0.5f   // top-right (3)
+        };
 
-        GL.BindVertexArray(_particleVAO);
-        GL.BindBuffer(BufferTarget.ArrayBuffer, _particleVBO);
+        _quadVAO = GL.GenVertexArray();
+        _quadVBO = GL.GenBuffer();
+        _particleSSBO = GL.GenBuffer();
 
-        // Position (location 0) - 3 floats
-        GL.VertexAttribPointer(0, 3, VertexAttribPointerType.Float, false, 32, 0);
+        // Setup quad VAO/VBO
+        GL.BindVertexArray(_quadVAO);
+
+        // Upload quad vertices (location 0, divisor 0 - same for all instances)
+        GL.BindBuffer(BufferTarget.ArrayBuffer, _quadVBO);
+        GL.BufferData(BufferTarget.ArrayBuffer, quadVertices.Length * sizeof(float), quadVertices, BufferUsageHint.StaticDraw);
+        GL.VertexAttribPointer(0, 2, VertexAttribPointerType.Float, false, 0, 0);
         GL.EnableVertexAttribArray(0);
 
-        // Color (location 1) - 4 floats, offset by 16 bytes (3 floats + 1 padding)
-        GL.VertexAttribPointer(1, 4, VertexAttribPointerType.Float, false, 32, 16);
-        GL.EnableVertexAttribArray(1);
-
+        // Unbind
         GL.BindVertexArray(0);
+        GL.BindBuffer(BufferTarget.ArrayBuffer, 0);
     }
 
     /// <summary>
-    /// Updates the GPU buffer with new particle data.
-    /// Handles proper disposal of old buffer to prevent memory leaks.
+    /// Updates the SSBO with new particle data using buffer orphaning pattern.
+    /// This prevents GPU stalls by discarding the old buffer before uploading new data.
     /// </summary>
     public void UpdateParticleBuffer(ParticleData[] particles)
     {
-        if (!_glLoaded || particles == null || particles.Length == 0)
+        if (!_glLoaded || particles == null)
             return;
 
         _glControl.MakeCurrent();
-
-        // CRITICAL: Delete old buffer to prevent GPU memory leak
-        if (_particleVBO != 0)
-        {
-            GL.DeleteBuffer(_particleVBO);
-        }
-
-        // Create new VBO with particle data
-        _particleVBO = GL.GenBuffer();
-        GL.BindBuffer(BufferTarget.ArrayBuffer, _particleVBO);
-
-        // Upload data
-        GL.BufferData(BufferTarget.ArrayBuffer,
-            particles.Length * sizeof(float) * 8, // 8 floats per particle (3 pos + 1 pad + 4 color)
-            particles,
-            BufferUsageHint.StaticDraw);
-
-        // Reconfigure VAO
-        GL.BindVertexArray(_particleVAO);
-        GL.BindBuffer(BufferTarget.ArrayBuffer, _particleVBO);
-
-        // Position (location 0)
-        GL.VertexAttribPointer(0, 3, VertexAttribPointerType.Float, false, 32, 0);
-        GL.EnableVertexAttribArray(0);
-
-        // Color (location 1)
-        GL.VertexAttribPointer(1, 4, VertexAttribPointerType.Float, false, 32, 16);
-        GL.EnableVertexAttribArray(1);
-
-        GL.BindVertexArray(0);
         _particleCount = particles.Length;
+
+        if (particles.Length == 0)
+            return;
+
+        // Bind SSBO
+        GL.BindBuffer(BufferTarget.ShaderStorageBuffer, _particleSSBO);
+
+        // Buffer orphaning pattern from PITFALLS.md:
+        // 1. Allocate new storage (orphans old buffer, prevents GPU stall)
+        // 2. Upload data with BufferSubData
+        int bufferSize = particles.Length * ParticleData.SizeInBytes;
+        GL.BufferData(BufferTarget.ShaderStorageBuffer,
+            bufferSize,
+            IntPtr.Zero,  // Orphan existing buffer
+            BufferUsageHint.DynamicDraw);
+
+        GL.BufferSubData(BufferTarget.ShaderStorageBuffer,
+            IntPtr.Zero,
+            bufferSize,
+            particles);
+
+        GL.BindBuffer(BufferTarget.ShaderStorageBuffer, 0);
     }
 
     /// <summary>
@@ -369,33 +382,35 @@ public class GLHost
     }
 
     /// <summary>
-    /// Renders the particles using point sprites.
+    /// Renders particles using instanced rendering with SSBO.
+    /// Single draw call for all particles: glDrawArraysInstanced.
     /// </summary>
     private void RenderParticles()
     {
-        if (_particleCount == 0) return;
+        if (_particleCount == 0 || _particleSSBO == 0) return;
 
         GL.UseProgram(_particleShaderProgram);
 
-        // Calculate MVP (same as box)
-        Matrix4 mvp = _modelMatrix * _viewMatrix * _projectionMatrix;
-        int mvpLoc = GL.GetUniformLocation(_particleShaderProgram, "mvp");
-        GL.UniformMatrix4(mvpLoc, false, ref mvp);
+        // Bind SSBO to binding point 0 for shader access
+        GL.BindBufferBase(BufferRangeTarget.ShaderStorageBuffer, 0, _particleSSBO);
 
-        // Set point size
-        GL.Uniform1(_pointSizeUniformLocation, _particleSize);
+        // Calculate MVP matrix from camera
+        Matrix4 view = _camera.GetViewMatrix();
+        Matrix4 projection = _camera.GetProjectionMatrix();
+        Matrix4 mvp = view * projection;
+        GL.UniformMatrix4(_mvpUniformLocation, false, ref mvp);
 
-        // Enable point sprites
-        GL.Enable(EnableCap.PointSprite);
-        GL.Enable(EnableCap.ProgramPointSize);
+        // Set particle size uniform
+        GL.Uniform1(_particleSizeUniformLocation, _particleSize);
 
-        // Draw particles
-        GL.BindVertexArray(_particleVAO);
-        GL.DrawArrays(PrimitiveType.Points, 0, _particleCount);
+        // Instanced draw: 4 vertices (quad), _particleCount instances
+        // This is the key performance optimization - single draw call for 100K particles
+        GL.BindVertexArray(_quadVAO);
+        GL.DrawArraysInstanced(PrimitiveType.TriangleStrip, 0, 4, _particleCount);
         GL.BindVertexArray(0);
 
-        GL.Disable(EnableCap.PointSprite);
-        GL.Disable(EnableCap.ProgramPointSize);
+        // Unbind SSBO
+        GL.BindBufferBase(BufferRangeTarget.ShaderStorageBuffer, 0, 0);
         GL.UseProgram(0);
     }
 
@@ -444,6 +459,36 @@ public class GLHost
 
         GL.Viewport(0, 0, _width, _height);
         UpdateProjectionMatrix();
+
+        // Update camera projection
+        _camera?.Resize(_width, _height);
+    }
+
+    /// <summary>
+    /// Orbits the camera based on mouse delta (left-drag).
+    /// </summary>
+    public void OrbitCamera(float deltaYaw, float deltaPitch)
+    {
+        if (!_glLoaded) return;
+        _camera?.UpdateOrbit(deltaYaw, deltaPitch);
+    }
+
+    /// <summary>
+    /// Zooms the camera based on scroll wheel delta.
+    /// </summary>
+    public void ZoomCamera(float deltaZoom)
+    {
+        if (!_glLoaded) return;
+        _camera?.UpdateZoom(deltaZoom);
+    }
+
+    /// <summary>
+    /// Pans the camera target point (right-drag).
+    /// </summary>
+    public void PanCamera(float deltaX, float deltaY)
+    {
+        if (!_glLoaded) return;
+        _camera?.UpdatePan(deltaX, deltaY);
     }
 
     /// <summary>
@@ -477,13 +522,19 @@ public class GLHost
         GL.DeleteProgram(_shaderProgram);
 
         // CRITICAL: Delete particle resources to prevent memory leak
-        if (_particleVBO != 0)
+        // SSBO for instanced rendering
+        if (_particleSSBO != 0)
         {
-            GL.DeleteBuffer(_particleVBO);
+            GL.DeleteBuffer(_particleSSBO);
         }
-        if (_particleVAO != 0)
+        // Quad mesh for instanced rendering
+        if (_quadVBO != 0)
         {
-            GL.DeleteVertexArray(_particleVAO);
+            GL.DeleteBuffer(_quadVBO);
+        }
+        if (_quadVAO != 0)
+        {
+            GL.DeleteVertexArray(_quadVAO);
         }
         if (_particleShaderProgram != 0)
         {
