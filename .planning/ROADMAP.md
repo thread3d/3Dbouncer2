@@ -35,7 +35,10 @@
 4. Background color is configurable and renders correctly
 5. Semi-transparent back panel on the box is visible
 
-**Plans:** TBD
+**Plans:** 1 plan
+
+Plans:
+- [ ] 01-PLAN.md — Project setup with OpenTK GLControl, OpenGL lifecycle management, and semi-transparent box rendering
 
 ---
 
@@ -140,7 +143,7 @@
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Foundation | 0/3 | Not started | - |
+| 1. Foundation | 0/1 | Planned | - |
 | 2. Text-to-Particles | 0/3 | Not started | - |
 | 3. Particle Rendering | 0/2 | Not started | - |
 | 4. Physics Simulation | 0/3 | Not started | - |
