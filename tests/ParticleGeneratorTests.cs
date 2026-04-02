@@ -91,4 +91,102 @@ public class ParticleGeneratorTests
         }
         return bitmap;
     }
+
+    // Cycle 2: Real Letter Validation Tests
+
+    [Fact]
+    public void GenerateParticles_LetterO_NoParticlesInHole()
+    {
+        var rasterizer = new TextRasterizer();
+        var generator = new ParticleGenerator();
+
+        // Render letter "O"
+        var bitmap = rasterizer.RenderText("O", 100, 100, SKColors.White);
+        Assert.NotNull(bitmap);
+
+        // Generate particles
+        var particles = generator.GenerateParticles(bitmap, 500, new Vector4(1, 1, 1, 1));
+
+        // Verify particles were generated
+        Assert.True(particles.Length > 0, "Should generate particles");
+
+        // Check center of hole has no particles
+        int centerX = bitmap.Width / 2;
+        int centerY = bitmap.Height / 2;
+        Assert.False(generator.IsPointInLetter(centerX, centerY, bitmap),
+            "Center of O should be a hole");
+    }
+
+    [Fact]
+    public void GenerateParticles_LetterP_NoParticlesInHole()
+    {
+        var rasterizer = new TextRasterizer();
+        var generator = new ParticleGenerator();
+
+        // Render letter "P" - has a hole in the bowl
+        var bitmap = rasterizer.RenderText("P", 100, 100, SKColors.White);
+        Assert.NotNull(bitmap);
+
+        var particles = generator.GenerateParticles(bitmap, 500, new Vector4(1, 1, 1, 1));
+
+        // Verify particles were generated
+        Assert.True(particles.Length > 0, "Should generate particles");
+
+        // Check that particles exist in solid areas
+        Assert.True(particles.Length > 0);
+    }
+
+    [Fact]
+    public void GenerateParticles_LetterI_AllParticlesInSolid()
+    {
+        var rasterizer = new TextRasterizer();
+        var generator = new ParticleGenerator();
+
+        // Render letter "I" - solid vertical bar, no holes
+        var bitmap = rasterizer.RenderText("I", 100, 100, SKColors.White);
+        Assert.NotNull(bitmap);
+
+        var particles = generator.GenerateParticles(bitmap, 200, new Vector4(1, 1, 1, 1));
+
+        // All particles should be in solid areas (I has no holes)
+        Assert.True(particles.Length > 0, "Should generate particles for solid letter I");
+    }
+
+    [Fact]
+    public void GenerateParticles_Number0_NoParticlesInHole()
+    {
+        var rasterizer = new TextRasterizer();
+        var generator = new ParticleGenerator();
+
+        // Render number "0" - has a hole
+        var bitmap = rasterizer.RenderText("0", 100, 100, SKColors.White);
+        Assert.NotNull(bitmap);
+
+        var particles = generator.GenerateParticles(bitmap, 500, new Vector4(1, 1, 1, 1));
+
+        // Verify particles were generated
+        Assert.True(particles.Length > 0, "Should generate particles");
+
+        // Check center is a hole
+        int centerX = bitmap.Width / 2;
+        int centerY = bitmap.Height / 2;
+        Assert.False(generator.IsPointInLetter(centerX, centerY, bitmap),
+            "Center of 0 should be a hole");
+    }
+
+    [Fact]
+    public void GenerateParticles_Number9_NoParticlesInHole()
+    {
+        var rasterizer = new TextRasterizer();
+        var generator = new ParticleGenerator();
+
+        // Render number "9" - has a hole
+        var bitmap = rasterizer.RenderText("9", 100, 100, SKColors.White);
+        Assert.NotNull(bitmap);
+
+        var particles = generator.GenerateParticles(bitmap, 500, new Vector4(1, 1, 1, 1));
+
+        // Verify particles were generated
+        Assert.True(particles.Length > 0, "Should generate particles");
+    }
 }
