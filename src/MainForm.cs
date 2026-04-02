@@ -38,6 +38,14 @@ public partial class MainForm : Form
     private int _currentParticleCount = 10000;
     private float _currentParticleSize = 4.0f;
 
+    // Camera mouse controls
+    private bool _isLeftDragging = false;
+    private bool _isRightDragging = false;
+    private Point _lastMousePos;
+    private const float OrbitSensitivity = 0.01f;
+    private const float PanSensitivity = 0.01f;
+    private const float ZoomSensitivity = 0.1f;
+
     public MainForm()
     {
         InitializeComponent();
@@ -295,10 +303,81 @@ public partial class MainForm : Form
         // Initialize GLHost with proper lifecycle management
         _glHost = new GLHost();
         _glHost.Initialize(_glControl);
+
+        // Wire up mouse events for camera controls
+        _glControl.MouseDown += OnMouseDown;
+        _glControl.MouseMove += OnMouseMove;
+        _glControl.MouseUp += OnMouseUp;
+        _glControl.MouseWheel += OnMouseWheel;
+    }
+
+    /// <summary>
+    /// Handles mouse down events for camera orbit and pan controls.
+    /// </summary>
+    private void OnMouseDown(object? sender, MouseEventArgs e)
+    {
+        if (e.Button == MouseButtons.Left)
+        {
+            _isLeftDragging = true;
+            _lastMousePos = e.Location;
+        }
+        else if (e.Button == MouseButtons.Right)
+        {
+            _isRightDragging = true;
+            _lastMousePos = e.Location;
+        }
+    }
+
+    /// <summary>
+    /// Handles mouse up events to end drag operations.
+    /// </summary>
+    private void OnMouseUp(object? sender, MouseEventArgs e)
+    {
+        if (e.Button == MouseButtons.Left) _isLeftDragging = false;
+        if (e.Button == MouseButtons.Right) _isRightDragging = false;
+    }
+
+    /// <summary>
+    /// Handles mouse move events for camera orbit and pan.
+    /// </summary>
+    private void OnMouseMove(object? sender, MouseEventArgs e)
+    {
+        if (_isLeftDragging)
+        {
+            float deltaX = (e.X - _lastMousePos.X) * OrbitSensitivity;
+            float deltaY = (e.Y - _lastMousePos.Y) * OrbitSensitivity;
+            _glHost?.OrbitCamera(deltaX, deltaY);
+            _lastMousePos = e.Location;
+        }
+        else if (_isRightDragging)
+        {
+            float deltaX = (e.X - _lastMousePos.X) * PanSensitivity;
+            float deltaY = (e.Y - _lastMousePos.Y) * PanSensitivity;
+            _glHost?.PanCamera(deltaX, -deltaY);  // Invert Y for natural feel
+            _lastMousePos = e.Location;
+        }
+    }
+
+    /// <summary>
+    /// Handles mouse wheel events for camera zoom.
+    /// </summary>
+    private void OnMouseWheel(object? sender, MouseEventArgs e)
+    {
+        float delta = e.Delta * ZoomSensitivity / 120f;  // Delta is in 120 increments
+        _glHost?.ZoomCamera(delta);
     }
 
     protected override void OnFormClosing(FormClosingEventArgs e)
     {
+        // Unwire mouse events
+        if (_glControl != null)
+        {
+            _glControl.MouseDown -= OnMouseDown;
+            _glControl.MouseMove -= OnMouseMove;
+            _glControl.MouseUp -= OnMouseUp;
+            _glControl.MouseWheel -= OnMouseWheel;
+        }
+
         _glHost?.Dispose();
 
         // Dispose all resources
