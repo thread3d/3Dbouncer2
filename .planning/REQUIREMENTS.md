@@ -9,11 +9,11 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Rendering
 
-- [ ] **REND-01**: OpenGL context initializes without crashes (using Load event pattern)
-- [ ] **REND-02**: Semi-transparent box renders with back panel visible
+- [x] **REND-01**: OpenGL context initializes without crashes (using Load event pattern)
+- [x] **REND-02**: Semi-transparent box renders with back panel visible
 - [ ] **REND-03**: Point particles render efficiently (100K at 60 FPS via instancing)
-- [ ] **REND-04**: Window resizes without breaking rendering context
-- [ ] **REND-05**: Background color is configurable
+- [x] **REND-04**: Window resizes without breaking rendering context
+- [x] **REND-05**: Background color is configurable
 
 ### Text-to-Particles
 
@@ -44,7 +44,7 @@ Requirements for initial release. Each maps to roadmap phases.
 
 - [ ] **UI-01**: All controls are in a collapsible side panel
 - [ ] **UI-02**: 3D view is main focus with orbit/zoom/pan camera controls
-- [ ] **UI-03**: Application launches as standard Windows app with title bar
+- [x] **UI-03**: Application launches as standard Windows app with title bar
 - [ ] **UI-04**: UI remains responsive during particle simulation
 
 ## v2 Requirements
@@ -88,11 +88,11 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| REND-01 | Phase 1 | Pending |
-| REND-02 | Phase 1 | Pending |
+| REND-01 | Phase 1 | Complete |
+| REND-02 | Phase 1 | Complete |
 | REND-03 | Phase 3 | Pending |
-| REND-04 | Phase 1 | Pending |
-| REND-05 | Phase 1 | Pending |
+| REND-04 | Phase 1 | Complete |
+| REND-05 | Phase 1 | Complete |
 | TEXT-01 | Phase 2 | Pending |
 | TEXT-02 | Phase 2 | Pending |
 | TEXT-03 | Phase 2 | Pending |
@@ -111,7 +111,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | CTRL-05 | Phase 5 | Pending |
 | UI-01 | Phase 5 | Pending |
 | UI-02 | Phase 5 | Pending |
-| UI-03 | Phase 1 | Pending |
+| UI-03 | Phase 1 | Complete |
 | UI-04 | Phase 5 | Pending |
 
 **Coverage:**
@@ -121,4 +121,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2025-04-02*
-*Last updated: 2025-04-02 after initial definition*
+*Last updated: 2026-04-02 after completing Phase 1 Plan 01*
