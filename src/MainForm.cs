@@ -40,7 +40,7 @@ public partial class MainForm : Form
 
     // Panel state
     private bool _isPanelCollapsed = false;
-    private const int ExpandedPanelWidth = 300;
+    private const int ExpandedPanelWidth = 400;
 
     // Current state
     private Color _currentTextColor = Color.White;
@@ -59,6 +59,13 @@ public partial class MainForm : Form
     {
         InitializeComponent();
         InitializeSplitContainer();
+        // GLControl initialization deferred to Form.Load event
+        // to ensure proper OpenGL context creation when using SplitContainer
+        this.Load += OnFormLoad;
+    }
+
+    private void OnFormLoad(object? sender, EventArgs e)
+    {
         InitializeGLControl();
         InitializeTextInput();
         InitializeParticleSystem();
@@ -156,8 +163,12 @@ public partial class MainForm : Form
             Text = "Choose Color",
             Location = new Point(10, yPos),
             Width = 100,
+            BackColor = _currentTextColor,  // Show initial color (White)
+            ForeColor = GetContrastColor(_currentTextColor),  // Black text on white
+            FlatStyle = FlatStyle.Flat,
             Parent = _sidePanel
         };
+        _colorButton.FlatAppearance.BorderSize = 1;
         _colorButton.Click += OnColorButtonClick;
 
         _colorLabel = new Label
@@ -236,8 +247,21 @@ public partial class MainForm : Form
         {
             _currentTextColor = _colorDialog.Color;
             _colorLabel.Text = $"Color: {_currentTextColor.Name}";
+            _colorButton.BackColor = _currentTextColor;
+            // Use black or white text depending on background brightness
+            _colorButton.ForeColor = GetContrastColor(_currentTextColor);
             RegenerateParticles();
         }
+    }
+
+    /// <summary>
+    /// Returns black or white depending on background color brightness for contrast.
+    /// </summary>
+    private Color GetContrastColor(Color background)
+    {
+        // Calculate perceived brightness (human eye is more sensitive to green)
+        double brightness = (background.R * 0.299 + background.G * 0.587 + background.B * 0.114) / 255;
+        return brightness > 0.5 ? Color.Black : Color.White;
     }
 
     /// <summary>
