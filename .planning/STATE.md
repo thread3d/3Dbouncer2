@@ -2,13 +2,13 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: unknown
-last_updated: "2026-04-02T12:00:00.000Z"
+status: in_progress
+last_updated: "2026-04-02T11:43:00Z"
 progress:
   total_phases: 6
-  completed_phases: 1
-  total_plans: 1
-  completed_plans: 1
+  completed_phases: 2
+  total_plans: 4
+  completed_plans: 4
 ---
 
 # STATE: 3D Text Bouncer
@@ -40,17 +40,17 @@ progress:
 
 | Attribute | Value |
 |-----------|-------|
-| **Current Phase** | 02-text-to-particles |
-| **Current Plan** | 02 |
-| **Status** | Plan 02-02 complete - Hole detection algorithm ready |
-| **Last Action** | Completed 02-02 with scanline even-odd implementation |
+| **Current Phase** | 03-physics-simulation |
+| **Current Plan** | 01 |
+| **Status** | Phase 2 complete - Text-to-particle pipeline ready with GPU buffers |
+| **Last Action** | Completed 02-03 with ColorDialog, TrackBars, and particle shaders |
 
 ### Progress Bar
 
 ```
-Overall:  [██░░░░░░░░░░░░░░░░] 10% (1/6 phases complete, Phase 2 in progress)
+Overall:  [████░░░░░░░░░░░░░░] 17% (2/6 phases complete, Phase 3 ready)
 Phase 1:  [██████████████████] 100% (1/1 plans complete)
-Phase 2:  [████████████░░░░░░] 67% (2/3 plans complete, Plan 03 next)
+Phase 2:  [██████████████████] 100% (3/3 plans complete)
 Phase 3:  [░░░░░░░░░░░░░░░░░░] 0% (not started)
 Phase 4:  [░░░░░░░░░░░░░░░░░░] 0% (not started)
 Phase 5:  [░░░░░░░░░░░░░░░░░░] 0% (not started)
@@ -88,6 +88,8 @@ Phase 6:  [░░░░░░░░░░░░░░░░░░] 0% (not start
 | Scanline even-odd for hole detection | Correctly identifies enclosed regions vs solid areas | 2026-04-02 |
 | Alpha threshold 128 for edges | Middle gray handles anti-aliased text edges | 2026-04-02 |
 | Scan 0 to x-1 for point-in-letter | Starting at point causes incorrect crossing count | 2026-04-02 |
+| Point sprites over instanced quads | Simpler for 100K particles, single draw call | 2026-04-02 |
+| GL.DeleteBuffer before GenBuffer | Explicit cleanup prevents GPU memory leaks | 2026-04-02 |
 
 ### Open Questions
 
@@ -109,13 +111,13 @@ Phase 6:  [░░░░░░░░░░░░░░░░░░] 0% (not start
 
 ### Last Session
 - **Date:** 2026-04-02
-- **Activity:** Executed Plan 02 of Phase 2 - Hole Detection Algorithm
-- **Outcome:** ParticleGenerator with scanline even-odd algorithm, 9 unit tests passing, hole detection for letters O, P, Q, I, 0, 9
+- **Activity:** Executed Plan 03 of Phase 2 - Buffer Integration
+- **Outcome:** Complete text-to-particle pipeline with ColorDialog, TrackBars, and point sprite rendering
 
 ### Next Actions
-1. Plan Phase 2: Buffer Integration (Plan 02-03)
-2. Create GPU buffer upload from particle data
-3. Integrate with OpenGL SSBO
+1. Plan Phase 3: Physics Simulation (Plan 03-01)
+2. Design ParticlePhysics class with velocity/position integration
+3. Implement collision detection with box boundaries
 
 ### Deferred to v2
 - GPU compute shaders for physics (if CPU insufficient)
