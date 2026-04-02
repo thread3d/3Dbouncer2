@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-last_updated: "2026-04-02T09:32:37.401Z"
+last_updated: "2026-04-02T10:55:39.320Z"
 progress:
   total_phases: 6
-  completed_phases: 2
-  total_plans: 4
-  completed_plans: 4
+  completed_phases: 3
+  total_plans: 5
+  completed_plans: 5
 ---
 
 # STATE: 3D Text Bouncer
@@ -40,18 +40,18 @@ progress:
 
 | Attribute | Value |
 |-----------|-------|
-| **Current Phase** | 03-physics-simulation |
-| **Current Plan** | 01 |
-| **Status** | Phase 2 complete - Text-to-particle pipeline ready with GPU buffers |
-| **Last Action** | Completed 02-03 with ColorDialog, TrackBars, and particle shaders |
+| **Current Phase** | 03-particle-rendering |
+| **Current Plan** | 01 complete |
+| **Status** | Phase 3 complete - Instanced rendering with SSBO and camera controls |
+| **Last Action** | Completed 03-01 with instanced rendering, SSBO, and orbit camera |
 
 ### Progress Bar
 
 ```
-Overall:  [████░░░░░░░░░░░░░░] 17% (2/6 phases complete, Phase 3 ready)
+Overall:  [██████░░░░░░░░░░░░] 50% (3/6 phases complete, Phase 4 ready)
 Phase 1:  [██████████████████] 100% (1/1 plans complete)
 Phase 2:  [██████████████████] 100% (3/3 plans complete)
-Phase 3:  [░░░░░░░░░░░░░░░░░░] 0% (not started)
+Phase 3:  [██████████████████] 100% (1/1 plans complete)
 Phase 4:  [░░░░░░░░░░░░░░░░░░] 0% (not started)
 Phase 5:  [░░░░░░░░░░░░░░░░░░] 0% (not started)
 Phase 6:  [░░░░░░░░░░░░░░░░░░] 0% (not started)
@@ -68,6 +68,7 @@ Phase 6:  [░░░░░░░░░░░░░░░░░░] 0% (not start
 | Physics Timestep | Fixed 1/60s | N/A | Not implemented |
 
 ---
+| Phase 03-particle-rendering P01 | 25 | 3 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -90,6 +91,10 @@ Phase 6:  [░░░░░░░░░░░░░░░░░░] 0% (not start
 | Scan 0 to x-1 for point-in-letter | Starting at point causes incorrect crossing count | 2026-04-02 |
 | Point sprites over instanced quads | Simpler for 100K particles, single draw call | 2026-04-02 |
 | GL.DeleteBuffer before GenBuffer | Explicit cleanup prevents GPU memory leaks | 2026-04-02 |
+| Instanced quads over point sprites | Better scalability and visual quality for 100K particles | 2026-04-02 |
+| SSBO with std430 layout | Matches C# Sequential struct layout exactly | 2026-04-02 |
+| Buffer orphaning pattern | Prevents GPU stalls during particle buffer updates | 2026-04-02 |
+| Spherical camera coordinates | Natural orbit controls with pitch clamping | 2026-04-02 |
 
 ### Open Questions
 
@@ -111,11 +116,11 @@ Phase 6:  [░░░░░░░░░░░░░░░░░░] 0% (not start
 
 ### Last Session
 - **Date:** 2026-04-02
-- **Activity:** Executed Plan 03 of Phase 2 - Buffer Integration
-- **Outcome:** Complete text-to-particle pipeline with ColorDialog, TrackBars, and point sprite rendering
+- **Activity:** Executed Plan 01 of Phase 3 - Instanced Rendering with SSBO
+- **Outcome:** Instanced rendering with SSBO, orbit camera with mouse controls, 100K particle capacity
 
 ### Next Actions
-1. Plan Phase 3: Physics Simulation (Plan 03-01)
+1. Plan Phase 4: Physics Simulation
 2. Design ParticlePhysics class with velocity/position integration
 3. Implement collision detection with box boundaries
 

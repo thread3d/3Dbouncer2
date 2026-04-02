@@ -11,7 +11,7 @@ Requirements for initial release. Each maps to roadmap phases.
 
 - [x] **REND-01**: OpenGL context initializes without crashes (using Load event pattern)
 - [x] **REND-02**: Semi-transparent box renders with back panel visible
-- [ ] **REND-03**: Point particles render efficiently (100K at 60 FPS via instancing)
+- [x] **REND-03**: Point particles render efficiently (100K at 60 FPS via instancing)
 - [x] **REND-04**: Window resizes without breaking rendering context
 - [x] **REND-05**: Background color is configurable
 
@@ -90,7 +90,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 |-------------|-------|--------|
 | REND-01 | Phase 1 | Complete |
 | REND-02 | Phase 1 | Complete |
-| REND-03 | Phase 3 | Pending |
+| REND-03 | Phase 3 | Complete |
 | REND-04 | Phase 1 | Complete |
 | REND-05 | Phase 1 | Complete |
 | TEXT-01 | Phase 2 | Pending |
