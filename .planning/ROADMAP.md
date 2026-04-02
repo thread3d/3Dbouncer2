@@ -82,7 +82,10 @@ Plans:
 3. Particles appear as visible points/sprites in the 3D view
 4. Camera can orbit, zoom, and pan around the particle cloud
 
-**Plans:** TBD
+**Plans:** 1 plan (0 complete, 1 ready)
+
+Plans:
+- [ ] 03-01-PLAN.md — Instanced rendering with SSBO, orbit camera with mouse controls, 100K particle performance validation
 
 ---
 
@@ -150,7 +153,7 @@ Plans:
 |-------|----------------|--------|-----------|
 | 1. Foundation | 1/1 | Complete | 2026-04-02 |
 | 2. Text-to-Particles | 3/3 | Complete | 2026-04-02 |
-| 3. Particle Rendering | 0/2 | Not started | - |
+| 3. Particle Rendering | 0/1 | Planned | - |
 | 4. Physics Simulation | 0/3 | Not started | - |
 | 5. UI Integration | 0/4 | Not started | - |
 | 6. Mixture Mode & Polish | 0/2 | Not started | - |
