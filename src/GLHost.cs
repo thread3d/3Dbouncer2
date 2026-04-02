@@ -2,6 +2,7 @@ using OpenTK.Graphics.OpenGL4;
 using OpenTK.Mathematics;
 using OpenTK.GLControl;
 using System;
+using System.Diagnostics;
 using System.IO;
 using System.Windows.Forms;
 
@@ -46,6 +47,11 @@ public class GLHost
 
     // Camera
     private Camera _camera = null!;
+
+    // Physics simulation
+    private PhysicsSimulator _physics = new();
+    private ParticleData[]? _particleData;  // Cached CPU-side particle data
+    private long _lastFrameTime;            // For delta time calculation
 
     /// <summary>
     /// Initializes the GLHost with the specified GLControl.
@@ -105,6 +111,9 @@ public class GLHost
         // Initialize camera
         _camera = new Camera(_width, _height);
         _viewMatrix = _camera.GetViewMatrix();
+
+        // Initialize frame timing for physics
+        _lastFrameTime = Stopwatch.GetTimestamp();
 
         // Start the game loop
         Application.Idle += OnApplicationIdle;
@@ -294,17 +303,30 @@ public class GLHost
     /// <summary>
     /// Updates the SSBO with new particle data using buffer orphaning pattern.
     /// This prevents GPU stalls by discarding the old buffer before uploading new data.
+    /// Also caches the particle data for physics simulation.
     /// </summary>
     public void UpdateParticleBuffer(ParticleData[] particles)
     {
         if (!_glLoaded || particles == null)
             return;
 
+        // Cache particles for physics simulation
+        _particleData = particles;
+
+        UploadParticlesToGPU(particles);
+    }
+
+    /// <summary>
+    /// Uploads particle data to GPU using buffer orphaning pattern.
+    /// Separated from UpdateParticleBuffer for re-upload during physics updates.
+    /// </summary>
+    private void UploadParticlesToGPU(ParticleData[] particles)
+    {
+        if (!_glLoaded || particles == null || particles.Length == 0)
+            return;
+
         _glControl.MakeCurrent();
         _particleCount = particles.Length;
-
-        if (particles.Length == 0)
-            return;
 
         // Bind SSBO
         GL.BindBuffer(BufferTarget.ShaderStorageBuffer, _particleSSBO);
@@ -493,17 +515,35 @@ public class GLHost
 
     /// <summary>
     /// Application.Idle handler for the game loop.
+    /// Runs physics simulation before rendering for frame-rate independent behavior.
     /// NOTE: Application.Idle pauses during window resize - this is expected behavior.
     /// </summary>
     private void OnApplicationIdle(object? sender, EventArgs e)
     {
-        // Only render when GL is loaded
-        // Application.Idle only fires when no messages are pending,
-        // so this creates our game loop
-        if (_glLoaded)
+        if (!_glLoaded)
+            return;
+
+        // Calculate delta time for physics using high-precision timer
+        var currentTime = Stopwatch.GetTimestamp();
+        float deltaTime = (float)(currentTime - _lastFrameTime) / Stopwatch.Frequency;
+        _lastFrameTime = currentTime;
+
+        // Clamp delta time to prevent physics explosion on frame drops
+        // (e.g., when window is minimized or system is under heavy load)
+        deltaTime = Math.Min(deltaTime, 0.1f);
+
+        // Run physics if we have particles and automatic mode is enabled
+        if (_particleData != null && _particleData.Length > 0)
         {
-            _glControl.Invalidate();
+            _physics.Update(deltaTime, _particleData);
+
+            // Re-upload particle data to GPU after physics update
+            // This ensures GPU renders the latest positions
+            UploadParticlesToGPU(_particleData);
         }
+
+        // Trigger render
+        _glControl.Invalidate();
     }
 
     /// <summary>

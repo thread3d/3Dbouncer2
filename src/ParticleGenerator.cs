@@ -56,6 +56,7 @@ public class ParticleGenerator
     /// <summary>
     /// Generates particles distributed across letter areas (excluding holes).
     /// Uses rejection sampling with even-odd point-in-letter test.
+    /// Each particle gets a random initial velocity for physics simulation.
     /// </summary>
     public ParticleData[] GenerateParticles(
         SKBitmap textBitmap,
@@ -92,7 +93,15 @@ public class ParticleGenerator
                 float z = 0.0f;
 
                 var position = new Vector3(normalizedX, normalizedY, z);
-                particles.Add(new ParticleData(position, particleColor));
+
+                // Assign random initial velocity: [-2, 2] units/second per axis
+                // Ensures particles are never motionless (PHYS-03 requirement)
+                float vx = (random.NextSingle() * 4.0f) - 2.0f;
+                float vy = (random.NextSingle() * 4.0f) - 2.0f;
+                float vz = (random.NextSingle() * 2.0f) - 1.0f; // Less Z movement (2D text spread)
+                var velocity = new Vector3(vx, vy, vz);
+
+                particles.Add(new ParticleData(position, velocity, particleColor));
             }
         }
 
