@@ -2,13 +2,13 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: unknown
-last_updated: "2026-04-02T12:24:12.956Z"
+status: in_progress
+last_updated: "2026-04-02T12:38:00.000Z"
 progress:
   total_phases: 6
   completed_phases: 4
   total_plans: 6
-  completed_plans: 6
+  completed_plans: 7
 ---
 
 # STATE: 3D Text Bouncer
@@ -40,20 +40,20 @@ progress:
 
 | Attribute | Value |
 |-----------|-------|
-| **Current Phase** | 04-physics-simulation |
+| **Current Phase** | 05-ui-integration |
 | **Current Plan** | 01 complete |
-| **Status** | Phase 4 complete - Fixed timestep physics with elastic box collisions |
-| **Last Action** | Completed 04-01 with PhysicsSimulator and velocity field |
+| **Status** | Phase 5 in progress - ControlMode foundation complete |
+| **Last Action** | Completed 05-01 with ControlMode enum and PhysicsSimulator mode support |
 
 ### Progress Bar
 
 ```
-Overall:  [████████░░░░░░░░░░] 67% (4/6 phases complete, Phase 5 ready)
+Overall:  [██████████░░░░░░░░] 67% (4/6 phases complete, Phase 5 in progress)
 Phase 1:  [██████████████████] 100% (1/1 plans complete)
 Phase 2:  [██████████████████] 100% (3/3 plans complete)
 Phase 3:  [██████████████████] 100% (1/1 plans complete)
 Phase 4:  [██████████████████] 100% (1/1 plans complete)
-Phase 5:  [░░░░░░░░░░░░░░░░░░] 0% (not started)
+Phase 5:  [███░░░░░░░░░░░░░░░] 25% (1/4 plans complete)
 Phase 6:  [░░░░░░░░░░░░░░░░░░] 0% (not started)
 ```
 
@@ -68,8 +68,10 @@ Phase 6:  [░░░░░░░░░░░░░░░░░░] 0% (not start
 | Physics Timestep | Fixed 1/60s | 1/60s | Implemented |
 
 ---
+
 | Phase 03-particle-rendering P01 | 25 | 3 tasks | 6 files |
 | Phase 04-physics-simulation P01 | 12 min | 3 tasks | 4 files |
+| Phase 05-ui-integration P01 | 8 min | 3 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -100,6 +102,9 @@ Phase 6:  [░░░░░░░░░░░░░░░░░░] 0% (not start
 | Accumulator clamped to 5 frames | Prevents spiral of death on frame drops | 2026-04-02 |
 | Particle radius 0.02f for collisions | Accounts for visual size in boundary detection | 2026-04-02 |
 | Perfectly elastic collisions default | Bounciness = 1.0 matches expected behavior | 2026-04-02 |
+| _isRunning kept for backward compatibility | Mode property is primary control but IsRunning still works | 2026-04-02 |
+| Manual mode pauses via early return | Cleanest implementation - skip physics updates entirely | 2026-04-02 |
+| ApplyManualOffsets applies uniform translation | Phase 6 will add rotation-based transforms | 2026-04-02 |
 
 ### Open Questions
 
@@ -121,13 +126,13 @@ Phase 6:  [░░░░░░░░░░░░░░░░░░] 0% (not start
 
 ### Last Session
 - **Date:** 2026-04-02
-- **Activity:** Executed Plan 01 of Phase 4 - Physics Simulation
-- **Outcome:** Fixed timestep physics with 60Hz accumulator, elastic box collisions, velocity field in ParticleData
+- **Activity:** Executed Plan 01 of Phase 5 - UI Integration
+- **Outcome:** ControlMode enum created, PhysicsSimulator updated with Mode property and manual overrides
 
 ### Next Actions
-1. Plan Phase 5: UI Controls for physics parameters
-2. Design UI for bounciness, box size, pause/resume controls
-3. Consider performance testing at 100K particles
+1. Plan Phase 5 Plan 2: Collapsible side panel with SplitContainer
+2. Design UI controls for camera and physics parameters
+3. Implement mode switcher UI (radio buttons)
 
 ### Deferred to v2
 - GPU compute shaders for physics (if CPU insufficient)
@@ -140,3 +145,4 @@ Phase 6:  [░░░░░░░░░░░░░░░░░░] 0% (not start
 ---
 
 *State initialized: 2026-04-02*
+*Updated: 2026-04-02*
