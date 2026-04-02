@@ -34,6 +34,14 @@ public class GLHost
     private int _width = 800;
     private int _height = 600;
 
+    // Particle system
+    private int _particleShaderProgram = 0;
+    private int _particleVBO = 0;
+    private int _particleVAO = 0;
+    private int _particleCount = 0;
+    private float _particleSize = 4.0f;
+    private int _pointSizeUniformLocation = -1;
+
     /// <summary>
     /// Initializes the GLHost with the specified GLControl.
     /// </summary>
@@ -84,6 +92,10 @@ public class GLHost
             new Vector3(0, 1, 0)    // Up vector
         );
         _modelMatrix = Matrix4.Identity;
+
+        // Initialize particle shaders and buffers
+        InitializeParticleShaders();
+        InitializeParticleBuffers();
 
         // Start the game loop
         Application.Idle += OnApplicationIdle;
@@ -204,6 +216,112 @@ public class GLHost
     }
 
     /// <summary>
+    /// Compiles and links the particle shader program.
+    /// </summary>
+    private void InitializeParticleShaders()
+    {
+        string vertexSource = File.ReadAllText(Path.Combine("Shaders", "particle.vert"));
+        string fragmentSource = File.ReadAllText(Path.Combine("Shaders", "particle.frag"));
+
+        int vertexShader = GL.CreateShader(ShaderType.VertexShader);
+        GL.ShaderSource(vertexShader, vertexSource);
+        GL.CompileShader(vertexShader);
+        GL.GetShader(vertexShader, ShaderParameter.CompileStatus, out int vStatus);
+        if (vStatus != 1) throw new InvalidOperationException($"Particle vertex shader failed: {GL.GetShaderInfoLog(vertexShader)}");
+
+        int fragmentShader = GL.CreateShader(ShaderType.FragmentShader);
+        GL.ShaderSource(fragmentShader, fragmentSource);
+        GL.CompileShader(fragmentShader);
+        GL.GetShader(fragmentShader, ShaderParameter.CompileStatus, out int fStatus);
+        if (fStatus != 1) throw new InvalidOperationException($"Particle fragment shader failed: {GL.GetShaderInfoLog(fragmentShader)}");
+
+        _particleShaderProgram = GL.CreateProgram();
+        GL.AttachShader(_particleShaderProgram, vertexShader);
+        GL.AttachShader(_particleShaderProgram, fragmentShader);
+        GL.LinkProgram(_particleShaderProgram);
+
+        GL.DetachShader(_particleShaderProgram, vertexShader);
+        GL.DetachShader(_particleShaderProgram, fragmentShader);
+        GL.DeleteShader(vertexShader);
+        GL.DeleteShader(fragmentShader);
+
+        _pointSizeUniformLocation = GL.GetUniformLocation(_particleShaderProgram, "uPointSize");
+    }
+
+    /// <summary>
+    /// Creates the particle VAO/VBO for instanced rendering.
+    /// </summary>
+    private void InitializeParticleBuffers()
+    {
+        _particleVAO = GL.GenVertexArray();
+        _particleVBO = GL.GenBuffer();
+
+        GL.BindVertexArray(_particleVAO);
+        GL.BindBuffer(BufferTarget.ArrayBuffer, _particleVBO);
+
+        // Position (location 0) - 3 floats
+        GL.VertexAttribPointer(0, 3, VertexAttribPointerType.Float, false, 32, 0);
+        GL.EnableVertexAttribArray(0);
+
+        // Color (location 1) - 4 floats, offset by 16 bytes (3 floats + 1 padding)
+        GL.VertexAttribPointer(1, 4, VertexAttribPointerType.Float, false, 32, 16);
+        GL.EnableVertexAttribArray(1);
+
+        GL.BindVertexArray(0);
+    }
+
+    /// <summary>
+    /// Updates the GPU buffer with new particle data.
+    /// Handles proper disposal of old buffer to prevent memory leaks.
+    /// </summary>
+    public void UpdateParticleBuffer(ParticleData[] particles)
+    {
+        if (!_glLoaded || particles == null || particles.Length == 0)
+            return;
+
+        _glControl.MakeCurrent();
+
+        // CRITICAL: Delete old buffer to prevent GPU memory leak
+        if (_particleVBO != 0)
+        {
+            GL.DeleteBuffer(_particleVBO);
+        }
+
+        // Create new VBO with particle data
+        _particleVBO = GL.GenBuffer();
+        GL.BindBuffer(BufferTarget.ArrayBuffer, _particleVBO);
+
+        // Upload data
+        GL.BufferData(BufferTarget.ArrayBuffer,
+            particles.Length * sizeof(float) * 8, // 8 floats per particle (3 pos + 1 pad + 4 color)
+            particles,
+            BufferUsageHint.StaticDraw);
+
+        // Reconfigure VAO
+        GL.BindVertexArray(_particleVAO);
+        GL.BindBuffer(BufferTarget.ArrayBuffer, _particleVBO);
+
+        // Position (location 0)
+        GL.VertexAttribPointer(0, 3, VertexAttribPointerType.Float, false, 32, 0);
+        GL.EnableVertexAttribArray(0);
+
+        // Color (location 1)
+        GL.VertexAttribPointer(1, 4, VertexAttribPointerType.Float, false, 32, 16);
+        GL.EnableVertexAttribArray(1);
+
+        GL.BindVertexArray(0);
+        _particleCount = particles.Length;
+    }
+
+    /// <summary>
+    /// Sets the particle size for rendering.
+    /// </summary>
+    public void SetParticleSize(float size)
+    {
+        _particleSize = MathHelper.Clamp(size, 1.0f, 50.0f);
+    }
+
+    /// <summary>
     /// Updates the projection matrix based on current viewport dimensions.
     /// </summary>
     private void UpdateProjectionMatrix()
@@ -243,8 +361,42 @@ public class GLHost
         // Render the box
         RenderBox();
 
+        // Render particles (will blend with box)
+        RenderParticles();
+
         // Swap buffers (use glControl, NOT GL.SwapBuffers)
         _glControl.SwapBuffers();
+    }
+
+    /// <summary>
+    /// Renders the particles using point sprites.
+    /// </summary>
+    private void RenderParticles()
+    {
+        if (_particleCount == 0) return;
+
+        GL.UseProgram(_particleShaderProgram);
+
+        // Calculate MVP (same as box)
+        Matrix4 mvp = _modelMatrix * _viewMatrix * _projectionMatrix;
+        int mvpLoc = GL.GetUniformLocation(_particleShaderProgram, "mvp");
+        GL.UniformMatrix4(mvpLoc, false, ref mvp);
+
+        // Set point size
+        GL.Uniform1(_pointSizeUniformLocation, _particleSize);
+
+        // Enable point sprites
+        GL.Enable(EnableCap.PointSprite);
+        GL.Enable(EnableCap.ProgramPointSize);
+
+        // Draw particles
+        GL.BindVertexArray(_particleVAO);
+        GL.DrawArrays(PrimitiveType.Points, 0, _particleCount);
+        GL.BindVertexArray(0);
+
+        GL.Disable(EnableCap.PointSprite);
+        GL.Disable(EnableCap.ProgramPointSize);
+        GL.UseProgram(0);
     }
 
     /// <summary>
@@ -318,10 +470,25 @@ public class GLHost
 
         Application.Idle -= OnApplicationIdle;
 
+        // Delete box resources
         GL.DeleteBuffer(_vbo);
         GL.DeleteBuffer(_ebo);
         GL.DeleteVertexArray(_vao);
         GL.DeleteProgram(_shaderProgram);
+
+        // CRITICAL: Delete particle resources to prevent memory leak
+        if (_particleVBO != 0)
+        {
+            GL.DeleteBuffer(_particleVBO);
+        }
+        if (_particleVAO != 0)
+        {
+            GL.DeleteVertexArray(_particleVAO);
+        }
+        if (_particleShaderProgram != 0)
+        {
+            GL.DeleteProgram(_particleShaderProgram);
+        }
 
         _glLoaded = false;
     }
