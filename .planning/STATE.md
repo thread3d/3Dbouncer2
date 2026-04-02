@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-last_updated: "2026-04-02T09:15:00.000Z"
+last_updated: "2026-04-02T12:00:00.000Z"
 progress:
   total_phases: 6
   completed_phases: 1
@@ -41,16 +41,16 @@ progress:
 | Attribute | Value |
 |-----------|-------|
 | **Current Phase** | 02-text-to-particles |
-| **Current Plan** | 01 |
-| **Status** | Plan 02-01 complete - Text rasterization ready |
-| **Last Action** | Completed 02-01 with SkiaSharp integration |
+| **Current Plan** | 02 |
+| **Status** | Plan 02-02 complete - Hole detection algorithm ready |
+| **Last Action** | Completed 02-02 with scanline even-odd implementation |
 
 ### Progress Bar
 
 ```
 Overall:  [██░░░░░░░░░░░░░░░░] 10% (1/6 phases complete, Phase 2 in progress)
 Phase 1:  [██████████████████] 100% (1/1 plans complete)
-Phase 2:  [██████░░░░░░░░░░░░] 33% (1/3 plans complete, Plan 02 in progress)
+Phase 2:  [████████████░░░░░░] 67% (2/3 plans complete, Plan 03 next)
 Phase 3:  [░░░░░░░░░░░░░░░░░░] 0% (not started)
 Phase 4:  [░░░░░░░░░░░░░░░░░░] 0% (not started)
 Phase 5:  [░░░░░░░░░░░░░░░░░░] 0% (not started)
@@ -85,12 +85,14 @@ Phase 6:  [░░░░░░░░░░░░░░░░░░] 0% (not start
 | Bgra8888 pixel format for text | Matches OpenGL GL_BGRA for direct texture upload | 2026-04-02 |
 | 512x256 bitmap size for text | Sufficient resolution for particle distribution, manageable size | 2026-04-02 |
 | ParticleData 32-byte alignment | Position (16) + Color (16) for std140 layout compatibility | 2026-04-02 |
+| Scanline even-odd for hole detection | Correctly identifies enclosed regions vs solid areas | 2026-04-02 |
+| Alpha threshold 128 for edges | Middle gray handles anti-aliased text edges | 2026-04-02 |
+| Scan 0 to x-1 for point-in-letter | Starting at point causes incorrect crossing count | 2026-04-02 |
 
 ### Open Questions
 
-1. **Hole detection algorithm:** Scanline flood-fill vs winding number - validate during Phase 2
-2. **Compute shader dispatch:** Verify OpenTK 4.x API patterns during Phase 4
-3. **Mixture mode physics:** Design force/impulse application approach during Phase 6
+1. **Compute shader dispatch:** Verify OpenTK 4.x API patterns during Phase 4
+2. **Mixture mode physics:** Design force/impulse application approach during Phase 6
 
 ### Known Risks
 
@@ -107,13 +109,13 @@ Phase 6:  [░░░░░░░░░░░░░░░░░░] 0% (not start
 
 ### Last Session
 - **Date:** 2026-04-02
-- **Activity:** Executed Plan 01 of Phase 2 - Text-to-Particles
-- **Outcome:** SkiaSharp integration with TextRasterizer, ParticleData struct, text input field
+- **Activity:** Executed Plan 02 of Phase 2 - Hole Detection Algorithm
+- **Outcome:** ParticleGenerator with scanline even-odd algorithm, 9 unit tests passing, hole detection for letters O, P, Q, I, 0, 9
 
 ### Next Actions
-1. Plan Phase 2: Hole Detection (Plan 02-02)
-2. Implement scanline even-odd hole detection algorithm
-3. Create ParticleGenerator with TDD approach
+1. Plan Phase 2: Buffer Integration (Plan 02-03)
+2. Create GPU buffer upload from particle data
+3. Integrate with OpenGL SSBO
 
 ### Deferred to v2
 - GPU compute shaders for physics (if CPU insufficient)

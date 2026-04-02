@@ -58,13 +58,13 @@ Plans:
 6. Particle count is adjustable via slider (1K to 100K range)
 7. Particle size is adjustable via slider (1px to 10px range)
 
-**Plans:** 3 plans (0 complete)
+**Plans:** 3 plans (2 complete)
 
 **Research Flag:** MAYBE - Hole detection algorithm (scanline vs flood-fill) may need validation
 
 Plans:
 - [x] 02-01-PLAN.md — SkiaSharp integration: TextRasterizer, ParticleData struct, text input field
-- [ ] 02-02-PLAN.md (TDD) — Hole detection: ParticleGenerator with scanline even-odd algorithm and unit tests
+- [x] 02-02-PLAN.md (TDD) — Hole detection: ParticleGenerator with scanline even-odd algorithm and unit tests
 - [ ] 02-03-PLAN.md — UI integration: ColorDialog, count/size sliders, GPU buffer upload, particle shaders
 
 ---
@@ -149,7 +149,7 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Foundation | 1/1 | Complete | 2026-04-02 |
-| 2. Text-to-Particles | 1/3 | In Progress | 2026-04-02 |
+| 2. Text-to-Particles | 2/3 | In Progress | 2026-04-02 |
 | 3. Particle Rendering | 0/2 | Not started | - |
 | 4. Physics Simulation | 0/3 | Not started | - |
 | 5. UI Integration | 0/4 | Not started | - |
