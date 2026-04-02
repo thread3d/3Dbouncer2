@@ -42,7 +42,7 @@ public class GLHost
     private int _particleCount = 0;
     private float _particleSize = 4.0f;
     private int _particleSizeUniformLocation = -1;
-    private int _mvpUniformLocation = -1;
+    private int _particleMvpUniformLocation = -1;
 
     // Camera
     private Camera _camera = null!;
@@ -254,7 +254,7 @@ public class GLHost
         GL.DeleteShader(vertexShader);
         GL.DeleteShader(fragmentShader);
 
-        _mvpUniformLocation = GL.GetUniformLocation(_particleShaderProgram, "mvp");
+        _particleMvpUniformLocation = GL.GetUniformLocation(_particleShaderProgram, "mvp");
         _particleSizeUniformLocation = GL.GetUniformLocation(_particleShaderProgram, "uParticleSize");
     }
 
@@ -398,7 +398,7 @@ public class GLHost
         Matrix4 view = _camera.GetViewMatrix();
         Matrix4 projection = _camera.GetProjectionMatrix();
         Matrix4 mvp = view * projection;
-        GL.UniformMatrix4(_mvpUniformLocation, false, ref mvp);
+        GL.UniformMatrix4(_particleMvpUniformLocation, false, ref mvp);
 
         // Set particle size uniform
         GL.Uniform1(_particleSizeUniformLocation, _particleSize);
