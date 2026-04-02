@@ -41,9 +41,9 @@ progress:
 | Attribute | Value |
 |-----------|-------|
 | **Current Phase** | 05-ui-integration |
-| **Current Plan** | 01 complete |
-| **Status** | Phase 5 in progress - ControlMode foundation complete |
-| **Last Action** | Completed 05-01 with ControlMode enum and PhysicsSimulator mode support |
+| **Current Plan** | 02 - CHECKPOINT reached (awaiting verification) |
+| **Status** | Checkpoint - Side panel implementation complete, awaiting user verification |
+| **Last Action** | Tasks 1-2 complete: SplitContainer layout with collapsible side panel implemented |
 
 ### Progress Bar
 
@@ -126,13 +126,13 @@ Phase 6:  [░░░░░░░░░░░░░░░░░░] 0% (not start
 
 ### Last Session
 - **Date:** 2026-04-02
-- **Activity:** Executed Plan 01 of Phase 5 - UI Integration
-- **Outcome:** ControlMode enum created, PhysicsSimulator updated with Mode property and manual overrides
+- **Activity:** Executed Tasks 1-2 of Plan 02 Phase 5 - Collapsible Side Panel
+- **Outcome:** SplitContainer layout implemented with collapsible side panel, all controls migrated, collapse/expand functionality working
 
 ### Next Actions
-1. Plan Phase 5 Plan 2: Collapsible side panel with SplitContainer
-2. Design UI controls for camera and physics parameters
-3. Implement mode switcher UI (radio buttons)
+1. **CHECKPOINT:** Verify side panel collapses/expands correctly (awaiting user approval)
+2. Resume execution after checkpoint: Finalize plan completion
+3. Proceed to Phase 5 Plan 3: Mode switcher UI (radio buttons)
 
 ### Deferred to v2
 - GPU compute shaders for physics (if CPU insufficient)
