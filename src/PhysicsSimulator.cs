@@ -18,6 +18,7 @@ public class PhysicsSimulator
     // State
     private float _accumulator = 0f;
     private bool _isRunning = true;
+    private ControlMode _currentMode = ControlMode.Automatic;
 
     // Performance tracking
     private int _physicsStepsThisFrame = 0;
@@ -42,6 +43,21 @@ public class PhysicsSimulator
     }
 
     /// <summary>
+    /// Gets or sets the current control mode.
+    /// Setting to Manual pauses physics; Automatic or Mixture resumes physics.
+    /// </summary>
+    public ControlMode Mode
+    {
+        get => _currentMode;
+        set
+        {
+            _currentMode = value;
+            // Update internal running state based on mode
+            _isRunning = _currentMode != ControlMode.Manual;
+        }
+    }
+
+    /// <summary>
     /// Gets the number of physics steps performed in the last Update call.
     /// Useful for debugging and performance monitoring.
     /// </summary>
@@ -60,7 +76,8 @@ public class PhysicsSimulator
 
         _physicsStepsThisFrame = 0;
 
-        if (!_isRunning)
+        // In Manual mode, physics updates are paused - user controls positions directly
+        if (_currentMode == ControlMode.Manual || !_isRunning)
             return;
 
         // Accumulate time, clamped to prevent spiral of death
