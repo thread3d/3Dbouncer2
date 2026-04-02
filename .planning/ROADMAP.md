@@ -127,7 +127,13 @@ Plans:
 6. UI remains responsive during particle simulation (no freezing)
 7. Application maintains 60 FPS while UI interactions occur
 
-**Plans:** TBD
+**Plans:** 4 plans (0 complete)
+
+Plans:
+- [ ] 05-01-PLAN.md — ControlMode enum and mode support in PhysicsSimulator (Automatic/Manual/Mixture)
+- [ ] 05-02-PLAN.md — Collapsible side panel with SplitContainer, collapse/expand button
+- [ ] 05-03-PLAN.md — Mode switcher UI (radio buttons), position sliders (X/Y/Z), rotation sliders (pitch/roll/yaw)
+- [ ] 05-04-PLAN.md — FPS counter and UI responsiveness validation (60 FPS target)
 
 ---
 
@@ -158,7 +164,7 @@ Plans:
 | 2. Text-to-Particles | 3/3 | Complete | 2026-04-02 |
 | 3. Particle Rendering | 1/1 | Complete | 2026-04-02 |
 | 4. Physics Simulation | 1/1 | Complete | 2026-04-02 |
-| 5. UI Integration | 0/4 | Not started | - |
+| 5. UI Integration | 0/4 | Ready | - |
 | 6. Mixture Mode & Polish | 0/2 | Not started | - |
 
 ---
