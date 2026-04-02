@@ -12,7 +12,7 @@
 
 - [x] **Phase 1: Foundation** - Working WinForms app with OpenTK GLControl, basic rendering pipeline
 - [x] **Phase 2: Text-to-Particles** - Text rasterization and particle distribution with hole detection
-- [ ] **Phase 3: Particle Rendering** - Efficient instanced rendering (100K particles at 60 FPS)
+- [x] **Phase 3: Particle Rendering** - Efficient instanced rendering (100K particles at 60 FPS)
 - [ ] **Phase 4: Physics Simulation** - Elastic collision physics with fixed timestep
 - [ ] **Phase 5: UI Integration** - Camera controls, side panel with all sliders and inputs
 - [ ] **Phase 6: Mixture Mode & Polish** - Physics/manual hybrid interaction and final polish
@@ -82,10 +82,10 @@ Plans:
 3. Particles appear as visible points/sprites in the 3D view
 4. Camera can orbit, zoom, and pan around the particle cloud
 
-**Plans:** 1 plan (0 complete, 1 ready)
+**Plans:** 1 plan (1 complete)
 
 Plans:
-- [ ] 03-01-PLAN.md — Instanced rendering with SSBO, orbit camera with mouse controls, 100K particle performance validation
+- [x] 03-01-PLAN.md — Instanced rendering with SSBO, orbit camera with mouse controls, 100K particle performance validation
 
 ---
 
@@ -102,9 +102,12 @@ Plans:
 3. Physics uses fixed timestep for stable, frame-rate independent behavior
 4. Automatic mode runs physics without requiring user input
 
-**Plans:** TBD
+**Plans:** 1 plan (1 planned)
 
-**Research Flag:** MAYBE - Compute shader dispatch patterns in OpenTK 4.x may need API verification
+**Research Flag:** COMPLETED - CPU-based physics selected for box collisions (GPU compute deferred to v2)
+
+Plans:
+- [ ] 04-01-PLAN.md — Fixed timestep physics with box collision detection, automatic mode, velocity integration
 
 ---
 
@@ -153,8 +156,8 @@ Plans:
 |-------|----------------|--------|-----------|
 | 1. Foundation | 1/1 | Complete | 2026-04-02 |
 | 2. Text-to-Particles | 3/3 | Complete | 2026-04-02 |
-| 3. Particle Rendering | 0/1 | Planned | - |
-| 4. Physics Simulation | 0/3 | Not started | - |
+| 3. Particle Rendering | 1/1 | Complete | 2026-04-02 |
+| 4. Physics Simulation | 0/1 | Planned | - |
 | 5. UI Integration | 0/4 | Not started | - |
 | 6. Mixture Mode & Polish | 0/2 | Not started | - |
 
