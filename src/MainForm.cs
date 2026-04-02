@@ -40,7 +40,7 @@ public partial class MainForm : Form
 
     // Panel state
     private bool _isPanelCollapsed = false;
-    private const int ExpandedPanelWidth = 400;
+    private const int ExpandedPanelWidth = 420;  // TrackBar needs ~380px + margins
 
     // Current state
     private Color _currentTextColor = Color.White;
@@ -411,6 +411,8 @@ public partial class MainForm : Form
 
         // Add GLControl to Panel2 (right side) of SplitContainer
         _splitContainer.Panel2.Controls.Add(_glControl);
+        _splitContainer.Panel2.Controls.SetChildIndex(_glControl, 0);
+        _glControl.BringToFront();
 
         // Initialize GLHost with proper lifecycle management
         _glHost = new GLHost();
