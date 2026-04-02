@@ -16,6 +16,11 @@ public partial class MainForm : Form
     private GLControl _glControl = null!;
     private GLHost _glHost = null!;
 
+    // SplitContainer for collapsible side panel
+    private SplitContainer _splitContainer = null!;
+    private Panel _sidePanel = null!;
+    private Button _collapseButton = null!;
+
     // Text input and rasterization
     private TextBox _textInput = null!;
     private TextRasterizer _textRasterizer = null!;
@@ -33,6 +38,10 @@ public partial class MainForm : Form
     private TrackBar _particleSizeSlider = null!;
     private Label _particleSizeLabel = null!;
 
+    // Panel state
+    private bool _isPanelCollapsed = false;
+    private const int ExpandedPanelWidth = 300;
+
     // Current state
     private Color _currentTextColor = Color.White;
     private int _currentParticleCount = 10000;
@@ -49,6 +58,7 @@ public partial class MainForm : Form
     public MainForm()
     {
         InitializeComponent();
+        InitializeSplitContainer();
         InitializeGLControl();
         InitializeTextInput();
         InitializeParticleSystem();
@@ -57,20 +67,68 @@ public partial class MainForm : Form
     }
 
     /// <summary>
+    /// Initializes the SplitContainer with side panel for UI controls.
+    /// </summary>
+    private void InitializeSplitContainer()
+    {
+        // Create SplitContainer
+        _splitContainer = new SplitContainer
+        {
+            Orientation = Orientation.Vertical,
+            Dock = DockStyle.Fill,
+            FixedPanel = FixedPanel.Panel1,
+            IsSplitterFixed = true
+        };
+
+        // Set panel widths
+        _splitContainer.Panel1MinSize = 0;
+        _splitContainer.SplitterDistance = ExpandedPanelWidth;
+
+        // Create side panel with auto-scroll
+        _sidePanel = new Panel
+        {
+            AutoScroll = true,
+            Dock = DockStyle.Fill,
+            BackColor = Color.FromArgb(40, 40, 40)
+        };
+        _splitContainer.Panel1.Controls.Add(_sidePanel);
+
+        // Create collapse button (placed on form, not side panel)
+        _collapseButton = new Button
+        {
+            Text = "<",
+            Width = 25,
+            Height = 25,
+            Location = new Point(ExpandedPanelWidth - 30, 5),
+            FlatStyle = FlatStyle.Flat,
+            ForeColor = Color.White,
+            BackColor = Color.FromArgb(60, 60, 60)
+        };
+        _collapseButton.FlatAppearance.BorderSize = 0;
+        _collapseButton.Click += OnCollapseButtonClick;
+
+        // Add controls to form: splitter first, then collapse button on top
+        Controls.Add(_splitContainer);
+        Controls.Add(_collapseButton);
+        _collapseButton.BringToFront();
+    }
+
+    /// <summary>
     /// Initializes the text input field and rasterizer for text-to-particle conversion.
+    /// Text input is placed in the side panel.
     /// </summary>
     private void InitializeTextInput()
     {
         // Initialize text rasterizer
         _textRasterizer = new TextRasterizer();
 
-        // Create text input box
+        // Create text input box (in side panel)
         _textInput = new TextBox
         {
             Text = "HELLO",
             Location = new Point(10, 10),
-            Width = 200,
-            Parent = this
+            Width = ExpandedPanelWidth - 40,  // Account for scrollbar margin
+            Parent = _sidePanel
         };
         _textInput.TextChanged += OnTextInputChanged;
     }
@@ -85,10 +143,12 @@ public partial class MainForm : Form
 
     /// <summary>
     /// Sets up the UI controls for particle configuration.
+    /// All controls are placed in the side panel.
     /// </summary>
     private void SetupUIControls()
     {
         int yPos = 50;
+        int panelWidth = ExpandedPanelWidth - 40;  // Account for margins
 
         // Color picker button
         _colorButton = new Button
@@ -96,7 +156,7 @@ public partial class MainForm : Form
             Text = "Choose Color",
             Location = new Point(10, yPos),
             Width = 100,
-            Parent = this
+            Parent = _sidePanel
         };
         _colorButton.Click += OnColorButtonClick;
 
@@ -104,8 +164,9 @@ public partial class MainForm : Form
         {
             Text = "Color: White",
             Location = new Point(120, yPos + 5),
-            Width = 150,
-            Parent = this
+            Width = panelWidth - 120,
+            ForeColor = Color.White,
+            Parent = _sidePanel
         };
 
         yPos += 40;
@@ -115,8 +176,9 @@ public partial class MainForm : Form
         {
             Text = "Particles: 10,000",
             Location = new Point(10, yPos),
-            Width = 150,
-            Parent = this
+            Width = panelWidth,
+            ForeColor = Color.White,
+            Parent = _sidePanel
         };
         yPos += 25;
 
@@ -127,8 +189,8 @@ public partial class MainForm : Form
             Value = 10000,
             TickFrequency = 10000,
             Location = new Point(10, yPos),
-            Width = 250,
-            Parent = this
+            Width = panelWidth,
+            Parent = _sidePanel
         };
         _particleCountSlider.ValueChanged += OnParticleCountChanged;
 
@@ -139,8 +201,9 @@ public partial class MainForm : Form
         {
             Text = "Size: 4px",
             Location = new Point(10, yPos),
-            Width = 150,
-            Parent = this
+            Width = panelWidth,
+            ForeColor = Color.White,
+            Parent = _sidePanel
         };
         yPos += 25;
 
@@ -151,8 +214,8 @@ public partial class MainForm : Form
             Value = 4,
             TickFrequency = 1,
             Location = new Point(10, yPos),
-            Width = 250,
-            Parent = this
+            Width = panelWidth,
+            Parent = _sidePanel
         };
         _particleSizeSlider.ValueChanged += OnParticleSizeChanged;
 
@@ -204,6 +267,30 @@ public partial class MainForm : Form
     private void OnTextInputChanged(object? sender, EventArgs e)
     {
         RegenerateParticles();
+    }
+
+    /// <summary>
+    /// Handles collapse/expand button click.
+    /// Toggles side panel visibility and repositions button.
+    /// </summary>
+    private void OnCollapseButtonClick(object? sender, EventArgs e)
+    {
+        _isPanelCollapsed = !_isPanelCollapsed;
+
+        if (_isPanelCollapsed)
+        {
+            // Collapse: hide panel, move button to left edge
+            _splitContainer.Panel1Collapsed = true;
+            _collapseButton.Text = ">";
+            _collapseButton.Left = 5;
+        }
+        else
+        {
+            // Expand: show panel, move button inside panel
+            _splitContainer.Panel1Collapsed = false;
+            _collapseButton.Text = "<";
+            _collapseButton.Left = ExpandedPanelWidth - 30;
+        }
     }
 
     /// <summary>
@@ -283,6 +370,7 @@ public partial class MainForm : Form
     /// <summary>
     /// Initializes the OpenTK GLControl with proper OpenGL 4.6 Core profile settings.
     /// The GLControl.Load event is the ONLY safe place to perform GL initialization.
+    /// GLControl is placed in SplitContainer.Panel2 to share space with side panel.
     /// </summary>
     private void InitializeGLControl()
     {
@@ -297,8 +385,8 @@ public partial class MainForm : Form
         _glControl = new GLControl(settings);
         _glControl.Dock = DockStyle.Fill;
 
-        // Add GLControl to the form
-        Controls.Add(_glControl);
+        // Add GLControl to Panel2 (right side) of SplitContainer
+        _splitContainer.Panel2.Controls.Add(_glControl);
 
         // Initialize GLHost with proper lifecycle management
         _glHost = new GLHost();
