@@ -20,6 +20,10 @@ public class PhysicsSimulator
     private bool _isRunning = true;
     private ControlMode _currentMode = ControlMode.Automatic;
 
+    // Manual override state (used in Manual mode)
+    private Vector3 _manualPosition = Vector3.Zero;
+    private Vector3 _manualRotation = Vector3.Zero; // Euler angles: pitch, roll, yaw in degrees
+
     // Performance tracking
     private int _physicsStepsThisFrame = 0;
 
@@ -62,6 +66,26 @@ public class PhysicsSimulator
     /// Useful for debugging and performance monitoring.
     /// </summary>
     public int PhysicsStepsThisFrame => _physicsStepsThisFrame;
+
+    /// <summary>
+    /// Gets or sets the manual position override (used in Manual mode).
+    /// Applied to all particles uniformly when ApplyManualOverrides is called.
+    /// </summary>
+    public Vector3 ManualPosition
+    {
+        get => _manualPosition;
+        set => _manualPosition = value;
+    }
+
+    /// <summary>
+    /// Gets or sets the manual rotation override in Euler angles (pitch, roll, yaw) in degrees.
+    /// Used in Manual mode for rotation control. Full rotation implementation deferred to Phase 6.
+    /// </summary>
+    public Vector3 ManualRotation
+    {
+        get => _manualRotation;
+        set => _manualRotation = value;
+    }
 
     /// <summary>
     /// Updates physics simulation using fixed timestep accumulator pattern.
@@ -175,5 +199,28 @@ public class PhysicsSimulator
     public void ResetAccumulator()
     {
         _accumulator = 0f;
+    }
+
+    /// <summary>
+    /// Applies manual position and rotation overrides to all particles.
+    /// Should only be called when Mode == ControlMode.Manual.
+    /// Currently applies position as uniform translation; rotation deferred to Phase 6.
+    /// </summary>
+    /// <param name="particles">Particle array to modify</param>
+    /// <param name="position">Position offset to apply</param>
+    /// <param name="rotation">Rotation in Euler angles (pitch, roll, yaw) in degrees</param>
+    public void ApplyManualOverrides(ParticleData[] particles, Vector3 position, Vector3 rotation)
+    {
+        if (particles == null || particles.Length == 0)
+            return;
+
+        for (int i = 0; i < particles.Length; i++)
+        {
+            // Apply position offset uniformly to all particles
+            particles[i].Position += position;
+        }
+
+        // Store the rotation values for future Phase 6 implementation
+        _manualRotation = rotation;
     }
 }
