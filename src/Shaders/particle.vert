@@ -2,10 +2,10 @@
 
 layout(location = 0) in vec2 aVertex;  // Base quad vertex (-0.5 to 0.5)
 
-// SSBO with particle data - std430 layout for tight packing
-// Each particle: Position (vec4) + Color (vec4) = 32 bytes
+// SSBO with particle data - std430 layout
+// Each particle: Position (vec4) + Velocity (vec4) + Color (vec4) = 48 bytes
 layout(std430, binding = 0) buffer ParticleData {
-    vec4 data[];  // Position at data[i*2], Color at data[i*2+1]
+    vec4 data[];  // Position at data[i*3], Color at data[i*3+2]
 } particles;
 
 uniform mat4 mvp;
@@ -17,11 +17,12 @@ out vec2 vTexCoord;
 void main()
 {
     // Get particle index from instance ID
-    uint idx = uint(gl_InstanceID) * 2u;
+    // Each particle: Position (vec4) + Velocity (vec4) + Color (vec4) = 3 vec4s
+    uint idx = uint(gl_InstanceID) * 3u;
 
     // Extract position and color from SSBO
     vec3 position = particles.data[idx].xyz;
-    vColor = particles.data[idx + 1u];
+    vColor = particles.data[idx + 2u];  // Skip Velocity at idx+1
 
     // Pass texture coordinate for circular particle in fragment shader
     vTexCoord = aVertex + 0.5;
