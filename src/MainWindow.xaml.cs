@@ -1,3 +1,4 @@
+using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -158,6 +159,7 @@ public partial class MainWindow : Window
             particleColor);
 
         _particleData = particles;
+        _physics.SetTextBitmap(_currentTextBitmap);
         UpdateParticleVisuals();
     }
 

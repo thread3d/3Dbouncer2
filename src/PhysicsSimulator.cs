@@ -1,10 +1,12 @@
 using OpenTK.Mathematics;
+using SkiaSharp;
 using System;
 
 namespace TextBouncer;
 
 /// <summary>
-/// Physics simulator implementing fixed timestep physics with elastic box collisions.
+/// Physics simulator implementing fixed timestep physics with elastic box collisions
+/// and bitmap-based letter boundary constraints.
 /// Uses accumulator pattern for frame-rate independent simulation.
 /// </summary>
 public class PhysicsSimulator
@@ -14,6 +16,7 @@ public class PhysicsSimulator
     private const float MaxAccumulation = 5f * FixedDt;    // Prevent spiral of death (max 5 frames)
     private const float BoxHalfSize = 1.0f;              // Box is 2x2x2 units centered at origin
     private const float ParticleRadius = 0.02f;          // Approximate particle visual size
+    private const byte AlphaThreshold = 128;             // Alpha threshold for letter boundary
 
     // State
     private float _accumulator = 0f;
@@ -26,6 +29,13 @@ public class PhysicsSimulator
 
     // Performance tracking
     private int _physicsStepsThisFrame = 0;
+
+    // Text bitmap for letter boundary constraints
+    private SKBitmap? _textBitmap;
+    private int _bitmapWidth;
+    private int _bitmapHeight;
+    private byte[]? _bitmapPixels;
+    private int _bitmapStride;
 
     /// <summary>
     /// Bounciness factor for collisions. 1.0 = perfectly elastic, 0.0 = no bounce.
@@ -88,6 +98,104 @@ public class PhysicsSimulator
     }
 
     /// <summary>
+    /// Sets the text bitmap used for letter boundary constraints.
+    /// Particles will be constrained to stay within letter shapes.
+    /// </summary>
+    public void SetTextBitmap(SKBitmap? bitmap)
+    {
+        _textBitmap = bitmap;
+        if (bitmap != null)
+        {
+            _bitmapWidth = bitmap.Width;
+            _bitmapHeight = bitmap.Height;
+            _bitmapStride = bitmap.RowBytes;
+            _bitmapPixels = bitmap.GetPixelSpan().ToArray();
+        }
+        else
+        {
+            _bitmapPixels = null;
+        }
+    }
+
+    /// <summary>
+    /// Checks if a 3D position is within the letter shapes by mapping to bitmap coordinates.
+    /// </summary>
+    private bool IsPointInLetter(Vector3 pos)
+    {
+        if (_textBitmap == null || _bitmapPixels == null)
+            return true; // No bitmap = no constraint
+
+        // Map 3D position (-1 to 1) to bitmap coordinates
+        int bx = (int)((pos.X + 1.0f) * 0.5f * _bitmapWidth);
+        int by = (int)((1.0f - (pos.Y + 1.0f) * 0.5f) * _bitmapHeight);
+
+        // Clamp to bitmap bounds
+        if (bx < 0) bx = 0;
+        if (bx >= _bitmapWidth) bx = _bitmapWidth - 1;
+        if (by < 0) by = 0;
+        if (by >= _bitmapHeight) by = _bitmapHeight - 1;
+
+        // Get pixel alpha (BGRA format, alpha at offset 3)
+        int pixelOffset = by * _bitmapStride + bx * 4;
+        byte alpha = _bitmapPixels[pixelOffset + 3];
+
+        return alpha > AlphaThreshold;
+    }
+
+    /// <summary>
+    /// Finds the nearest boundary point and returns a push direction.
+    /// Uses a simple search outward from the current position.
+    /// </summary>
+    private Vector3 GetPushDirection(Vector3 pos)
+    {
+        if (_textBitmap == null || _bitmapPixels == null)
+            return Vector3.Zero;
+
+        // Map 3D position to bitmap
+        int bx = (int)((pos.X + 1.0f) * 0.5f * _bitmapWidth);
+        int by = (int)((1.0f - (pos.Y + 1.0f) * 0.5f) * _bitmapHeight);
+
+        // Search in a spiral pattern to find nearest letter pixel
+        for (int radius = 1; radius < 20; radius++)
+        {
+            for (int dy = -radius; dy <= radius; dy++)
+            {
+                for (int dx = -radius; dx <= radius; dx++)
+                {
+                    if (Math.Abs(dx) != radius && Math.Abs(dy) != radius)
+                        continue;
+
+                    int sx = bx + dx;
+                    int sy = by + dy;
+
+                    if (sx < 0 || sx >= _bitmapWidth || sy < 0 || sy >= _bitmapHeight)
+                        continue;
+
+                    int pixelOffset = sy * _bitmapStride + sx * 4;
+                    byte alpha = _bitmapPixels[pixelOffset + 3];
+
+                    if (alpha > AlphaThreshold)
+                    {
+                        // Found a letter pixel - push away from it
+                        float pushX = -dx;
+                        float pushY = -dy;
+                        float len = (float)Math.Sqrt(pushX * pushX + pushY * pushY);
+                        if (len > 0.001f)
+                        {
+                            pushX /= len;
+                            pushY /= len;
+                        }
+                        return new Vector3(pushX, pushY, 0);
+                    }
+                }
+            }
+        }
+
+        // Fallback: push toward center
+        return new Vector3(-pos.X, -pos.Y, 0);
+    }
+
+    /// <summary>
     /// Updates physics simulation using fixed timestep accumulator pattern.
     /// Call this once per frame with the frame's delta time.
     /// </summary>
@@ -119,7 +227,8 @@ public class PhysicsSimulator
 
     /// <summary>
     /// Performs a single physics simulation step with collision detection.
-    /// Updates all particle positions and handles box boundary collisions.
+    /// Updates all particle positions and handles box boundary collisions
+    /// and letter boundary constraints.
     /// </summary>
     /// <param name="dt">Fixed timestep duration in seconds</param>
     /// <param name="particles">Particle array to simulate</param>
@@ -138,7 +247,7 @@ public class PhysicsSimulator
             // Update position: p = p + v * dt
             particle.Position += particle.Velocity * dt;
 
-            // Check and resolve collisions for each axis
+            // First: Box boundary collisions
             // X axis
             if (particle.Position.X > boxHalf - radius)
             {
@@ -173,6 +282,45 @@ public class PhysicsSimulator
             {
                 particle.Position.Z = -boxHalf + radius;
                 particle.Velocity.Z *= -Bounciness;
+            }
+
+            // Second: Letter boundary constraints
+            if (_textBitmap != null)
+            {
+                // Iteratively push particle back into letter shape
+                for (int iter = 0; iter < 5; iter++)
+                {
+                    if (IsPointInLetter(particle.Position))
+                        break;
+
+                    // Get push direction toward nearest letter boundary
+                    Vector3 pushDir = GetPushDirection(particle.Position);
+
+                    if (pushDir.LengthSquared > 0.001f)
+                    {
+                        // Push particle toward boundary
+                        float pushStrength = 0.05f;
+                        particle.Position.X += pushDir.X * pushStrength;
+                        particle.Position.Y += pushDir.Y * pushStrength;
+
+                        // Reflect velocity component along push direction
+                        float dot = particle.Velocity.X * pushDir.X + particle.Velocity.Y * pushDir.Y;
+                        if (dot < 0)
+                        {
+                            particle.Velocity.X -= 2 * dot * pushDir.X * Bounciness;
+                            particle.Velocity.Y -= 2 * dot * pushDir.Y * Bounciness;
+                        }
+                    }
+                    else
+                    {
+                        // No boundary found - move particle toward center
+                        particle.Position.X *= 0.95f;
+                        particle.Position.Y *= 0.95f;
+                        particle.Velocity.X *= 0.9f;
+                        particle.Velocity.Y *= 0.9f;
+                        break;
+                    }
+                }
             }
         }
     }
