@@ -29,6 +29,10 @@ public partial class MainWindow : Window
     private int _currentParticleCount = 10000;
     private ParticleData[]? _particleData;
 
+    // Polyhedron selection
+    private int _currentPolyhedronIndex = 1;
+    private PolyhedronData? _currentPolyhedronData;
+
     // Box transform
     private Vector3D _boxOffset = new(0, 0, 0);
     private Vector3D _boxVelocity = new(0.015, 0.01, 0.008);
@@ -80,46 +84,56 @@ public partial class MainWindow : Window
         };
         Viewport.Children.Add(_boxFace);
 
-        InitializeBoxGeometries();
+        InitializePolyhedronGeometry();
     }
 
-    private void InitializeBoxGeometries()
+    private void InitializePolyhedronGeometry()
     {
-        // Wireframe: 12 edges
-        var wireframePoints = new Point3DCollection
-        {
-            // Front face
-            new Point3D(-1, -1,  1), new Point3D( 1, -1,  1),
-            new Point3D( 1, -1,  1), new Point3D( 1,  1,  1),
-            new Point3D( 1,  1,  1), new Point3D(-1,  1,  1),
-            new Point3D(-1,  1,  1), new Point3D(-1, -1,  1),
-            // Back face
-            new Point3D(-1, -1, -1), new Point3D( 1, -1, -1),
-            new Point3D( 1, -1, -1), new Point3D( 1,  1, -1),
-            new Point3D( 1,  1, -1), new Point3D(-1,  1, -1),
-            new Point3D(-1,  1, -1), new Point3D(-1, -1, -1),
-            // Connecting edges
-            new Point3D(-1, -1,  1), new Point3D(-1, -1, -1),
-            new Point3D( 1, -1,  1), new Point3D( 1, -1, -1),
-            new Point3D( 1,  1,  1), new Point3D( 1,  1, -1),
-            new Point3D(-1,  1,  1), new Point3D(-1,  1, -1),
-        };
-        _boxWireframe.Points = wireframePoints;
+        _currentPolyhedronData = PolyhedronLibrary.GetPolyhedron(_currentPolyhedronIndex);
 
-        // Translucent front face (filled with lines)
-        var facePoints = new Point3DCollection();
-        int numLines = 20;
-        for (int i = 0; i <= numLines; i++)
+        // Wireframe from current polyhedron edges
+        if (_boxWireframe != null && _currentPolyhedronData != null)
         {
-            double t = -1.0 + 2.0 * i / numLines;
-            // Horizontal lines
-            facePoints.Add(new Point3D(-1, t, 1));
-            facePoints.Add(new Point3D(1, t, 1));
-            // Vertical lines
-            facePoints.Add(new Point3D(t, -1, 1));
-            facePoints.Add(new Point3D(t, 1, 1));
+            var wireframePoints = new Point3DCollection();
+            foreach (var edge in _currentPolyhedronData.Edges)
+            {
+                var v1 = _currentPolyhedronData.Vertices[edge[0]];
+                var v2 = _currentPolyhedronData.Vertices[edge[1]];
+                wireframePoints.Add(new Point3D(v1.X, v1.Y, v1.Z));
+                wireframePoints.Add(new Point3D(v2.X, v2.Y, v2.Z));
+            }
+            _boxWireframe.Points = wireframePoints;
         }
-        _boxFace.Points = facePoints;
+
+        // Translucent face grid - create from first 3 vertices forming a face
+        if (_boxFace != null && _currentPolyhedronData != null && _currentPolyhedronData.Vertices.Length >= 3)
+        {
+            var facePoints = new Point3DCollection();
+            int numLines = 20;
+
+            // Use first 3 vertices to establish face plane, then grid in that plane
+            var v0 = _currentPolyhedronData.Vertices[0];
+            var v1 = _currentPolyhedronData.Vertices[1];
+            var v2 = _currentPolyhedronData.Vertices[2];
+
+            // Create grid lines in the face plane
+            for (int i = 0; i <= numLines; i++)
+            {
+                double t = -1.0 + 2.0 * i / numLines;
+                // Line from v0 + t*(v1-v0) projected to face
+                double x = v0.X + t * (v1.X - v0.X);
+                double y = v0.Y + t * (v1.Y - v0.Y);
+                double z = v0.Z + t * (v1.Z - v0.Z);
+
+                double x2 = v0.X + t * (v2.X - v0.X);
+                double y2 = v0.Y + t * (v2.Y - v0.Y);
+                double z2 = v0.Z + t * (v2.Z - v0.Z);
+
+                facePoints.Add(new Point3D(x, y, z));
+                facePoints.Add(new Point3D(x2, y2, z2));
+            }
+            _boxFace.Points = facePoints;
+        }
     }
 
     private void WireEvents()
@@ -128,6 +142,7 @@ public partial class MainWindow : Window
         ColorButton.Click += OnColorButtonClick;
         ParticleCountSlider.ValueChanged += OnParticleCountChanged;
         BoxOpacitySlider.ValueChanged += OnBoxOpacityChanged;
+        PolyhedronSlider.ValueChanged += OnPolyhedronChanged;
         CameraControlRadio.Checked += OnControlTargetChanged;
         TextControlRadio.Checked += OnControlTargetChanged;
         // Camera controls
@@ -334,49 +349,46 @@ public partial class MainWindow : Window
     {
         if (_particlesVisual == null || _particleLocalPositions == null) return;
 
-        // Update box wireframe
-        if (_boxWireframe != null)
+        // Update box wireframe using current polyhedron
+        if (_boxWireframe != null && _currentPolyhedronData != null)
         {
             var wireframePoints = new Point3DCollection();
-            var originalWireframe = new[]
+            foreach (var edge in _currentPolyhedronData.Edges)
             {
-                // Front face
-                (new Point3D(-1,-1,1), new Point3D(1,-1,1)),
-                (new Point3D(1,-1,1), new Point3D(1,1,1)),
-                (new Point3D(1,1,1), new Point3D(-1,1,1)),
-                (new Point3D(-1,1,1), new Point3D(-1,-1,1)),
-                // Back face
-                (new Point3D(-1,-1,-1), new Point3D(1,-1,-1)),
-                (new Point3D(1,-1,-1), new Point3D(1,1,-1)),
-                (new Point3D(1,1,-1), new Point3D(-1,1,-1)),
-                (new Point3D(-1,1,-1), new Point3D(-1,-1,-1)),
-                // Connecting
-                (new Point3D(-1,-1,1), new Point3D(-1,-1,-1)),
-                (new Point3D(1,-1,1), new Point3D(1,-1,-1)),
-                (new Point3D(1,1,1), new Point3D(1,1,-1)),
-                (new Point3D(-1,1,1), new Point3D(-1,1,-1)),
-            };
-
-            foreach (var (p1, p2) in originalWireframe)
-            {
-                wireframePoints.Add(ApplyBoxTransform(p1));
-                wireframePoints.Add(ApplyBoxTransform(p2));
+                if (edge.Length < 2) continue;
+                int i0 = Math.Clamp(edge[0], 0, _currentPolyhedronData.Vertices.Length - 1);
+                int i1 = Math.Clamp(edge[1], 0, _currentPolyhedronData.Vertices.Length - 1);
+                var v1 = _currentPolyhedronData.Vertices[i0];
+                var v2 = _currentPolyhedronData.Vertices[i1];
+                wireframePoints.Add(ApplyBoxTransform(new Point3D(v1.X, v1.Y, v1.Z)));
+                wireframePoints.Add(ApplyBoxTransform(new Point3D(v2.X, v2.Y, v2.Z)));
             }
             _boxWireframe.Points = wireframePoints;
         }
 
-        // Update box face
-        if (_boxFace != null)
+        // Update translucent face grid
+        if (_boxFace != null && _currentPolyhedronData != null && _currentPolyhedronData.Vertices.Length >= 3)
         {
             var facePoints = new Point3DCollection();
             int numLines = 20;
+
+            var v0 = _currentPolyhedronData.Vertices[0];
+            var v1 = _currentPolyhedronData.Vertices[1];
+            var v2 = _currentPolyhedronData.Vertices[2];
+
             for (int i = 0; i <= numLines; i++)
             {
                 double t = -1.0 + 2.0 * i / numLines;
-                facePoints.Add(ApplyBoxTransform(new Point3D(-1, t, 1)));
-                facePoints.Add(ApplyBoxTransform(new Point3D(1, t, 1)));
-                facePoints.Add(ApplyBoxTransform(new Point3D(t, -1, 1)));
-                facePoints.Add(ApplyBoxTransform(new Point3D(t, 1, 1)));
+                double x = v0.X + t * (v1.X - v0.X);
+                double y = v0.Y + t * (v1.Y - v0.Y);
+                double z = v0.Z + t * (v1.Z - v0.Z);
+
+                double x2 = v0.X + t * (v2.X - v0.X);
+                double y2 = v0.Y + t * (v2.Y - v0.Y);
+                double z2 = v0.Z + t * (v2.Z - v0.Z);
+
+                facePoints.Add(ApplyBoxTransform(new Point3D(x, y, z)));
+                facePoints.Add(ApplyBoxTransform(new Point3D(x2, y2, z2)));
             }
             _boxFace.Points = facePoints;
             byte alpha = (byte)(_boxOpacity * 255);
@@ -494,6 +506,15 @@ public partial class MainWindow : Window
         if (BoxOpacityLabel == null) return;
         _boxOpacity = (float)(BoxOpacitySlider.Value / 100.0);
         BoxOpacityLabel.Content = $"Box Face Opacity: {BoxOpacitySlider.Value}%";
+    }
+
+    private void OnPolyhedronChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        if (PolyhedronLabel == null) return;
+        _currentPolyhedronIndex = (int)PolyhedronSlider.Value;
+        _currentPolyhedronData = PolyhedronLibrary.GetPolyhedron(_currentPolyhedronIndex);
+        PolyhedronLabel.Content = $"Polyhedron: {_currentPolyhedronData.Name}";
+        UpdateVisuals();
     }
 
     private void OnControlTargetChanged(object sender, RoutedEventArgs e)
