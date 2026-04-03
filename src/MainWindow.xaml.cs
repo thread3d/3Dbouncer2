@@ -31,6 +31,14 @@ public partial class MainWindow : Window
     private const double BoxHalf = 0.8; // Text stays within 80% of box to keep particles visible
     private const double TextBounceDamping = 0.995;
 
+    // Text rotation state (pitch, yaw, roll in degrees)
+    private double _textPitch = 0;
+    private double _textYaw = 0;
+    private double _textRoll = 0;
+    private double _angularPitch = 0.5;  // degrees per frame
+    private double _angularYaw = 0.3;
+    private double _angularRoll = 0.2;
+
     // Render loop
     private DispatcherTimer _renderTimer = null!;
     private System.Diagnostics.Stopwatch _stopwatch = null!;
@@ -121,18 +129,37 @@ public partial class MainWindow : Window
         if (_textOffset.X > BoxHalf || _textOffset.X < -BoxHalf)
         {
             _textVelocity.X *= -TextBounceDamping;
+            _angularPitch *= -1; // Flip pitch direction on X bounce
+            _angularRoll *= -1;  // Flip roll direction on X bounce
             _textOffset.X = Math.Clamp(_textOffset.X, -BoxHalf, BoxHalf);
         }
         if (_textOffset.Y > BoxHalf || _textOffset.Y < -BoxHalf)
         {
             _textVelocity.Y *= -TextBounceDamping;
+            _angularYaw *= -1;   // Flip yaw direction on Y bounce
+            _angularRoll *= -1;    // Flip roll direction on Y bounce
             _textOffset.Y = Math.Clamp(_textOffset.Y, -BoxHalf, BoxHalf);
         }
         if (_textOffset.Z > BoxHalf || _textOffset.Z < -BoxHalf)
         {
             _textVelocity.Z *= -TextBounceDamping;
+            _angularPitch *= -1;  // Flip pitch direction on Z bounce
+            _angularYaw *= -1;    // Flip yaw direction on Z bounce
             _textOffset.Z = Math.Clamp(_textOffset.Z, -BoxHalf, BoxHalf);
         }
+
+        // Update rotation angles
+        _textPitch += _angularPitch;
+        _textYaw += _angularYaw;
+        _textRoll += _angularRoll;
+
+        // Keep angles in reasonable range
+        if (_textPitch > 360) _textPitch -= 360;
+        if (_textPitch < 0) _textPitch += 360;
+        if (_textYaw > 360) _textYaw -= 360;
+        if (_textYaw < 0) _textYaw += 360;
+        if (_textRoll > 360) _textRoll -= 360;
+        if (_textRoll < 0) _textRoll += 360;
     }
 
     private void RegenerateParticles()
@@ -184,6 +211,14 @@ public partial class MainWindow : Window
             (Random.Shared.NextDouble() - 0.5) * 0.03,
             (Random.Shared.NextDouble() - 0.5) * 0.02);
 
+        // Reset rotation
+        _textPitch = 0;
+        _textYaw = 0;
+        _textRoll = 0;
+        _angularPitch = (Random.Shared.NextDouble() - 0.5) * 1.0;
+        _angularYaw = (Random.Shared.NextDouble() - 0.5) * 0.6;
+        _angularRoll = (Random.Shared.NextDouble() - 0.5) * 0.4;
+
         UpdateParticleVisuals();
     }
 
@@ -192,16 +227,45 @@ public partial class MainWindow : Window
         if (_particlesVisual == null || _particleData == null)
             return;
 
+        // Precompute rotation matrix for efficiency
+        double pitchRad = _textPitch * Math.PI / 180.0;
+        double yawRad = _textYaw * Math.PI / 180.0;
+        double rollRad = _textRoll * Math.PI / 180.0;
+
+        double cosPitch = Math.Cos(pitchRad), sinPitch = Math.Sin(pitchRad);
+        double cosYaw = Math.Cos(yawRad), sinYaw = Math.Sin(yawRad);
+        double cosRoll = Math.Cos(rollRad), sinRoll = Math.Sin(rollRad);
+
         var points = new Point3DCollection();
 
         for (int i = 0; i < _particleData.Length; i++)
         {
             var p = _particleData[i];
-            // Add text offset to particle position
+            // Translate to origin (relative to text center)
+            double px = p.Position.X;
+            double py = p.Position.Y;
+            double pz = p.Position.Z;
+
+            // Apply Yaw (Y-axis rotation) - spinning left/right
+            double x1 = cosYaw * px - sinYaw * pz;
+            double y1 = py;
+            double z1 = sinYaw * px + cosYaw * pz;
+
+            // Apply Pitch (X-axis rotation) - nodding up/down
+            double x2 = x1;
+            double y2 = cosPitch * y1 - sinPitch * z1;
+            double z2 = sinPitch * y1 + cosPitch * z1;
+
+            // Apply Roll (Z-axis rotation) - tilting side to side
+            double x3 = cosRoll * x2 - sinRoll * y2;
+            double y3 = sinRoll * x2 + cosRoll * y2;
+            double z3 = z2;
+
+            // Translate back to world position (add text offset)
             points.Add(new Point3D(
-                p.Position.X + _textOffset.X,
-                p.Position.Y + _textOffset.Y,
-                p.Position.Z + _textOffset.Z));
+                x3 + _textOffset.X,
+                y3 + _textOffset.Y,
+                z3 + _textOffset.Z));
         }
 
         _particlesVisual.Points = points;
