@@ -89,7 +89,7 @@
                                         Checked="OnControlTargetChanged"
                                         Margin="0,5,0,0"/>
                             <RadioButton x:Name="TextControlRadio"
-                                         Content="Text"
+                                         Content="Scene"
                                          Foreground="White"
                                          Checked="OnControlTargetChanged"
                                          Margin="0,5,0,0"/>
@@ -143,46 +143,46 @@
                                 Margin="0,0,0,5"/>
                     </StackPanel>
 
-                    <!-- Text controls -->
+                    <!-- Scene controls -->
                     <StackPanel x:Name="TextControlsPanel" Visibility="Collapsed">
-                        <Label Content="Text Position" Foreground="White" FontWeight="Bold"/>
-                        <Label x:Name="TextPosXLabel" Content="Text Pos X: 0.00" Foreground="White"/>
+                        <Label Content="Scene Position" Foreground="White" FontWeight="Bold"/>
+                        <Label x:Name="TextPosXLabel" Content="Scene Pos X: 0.00" Foreground="White"/>
                         <Slider x:Name="TextPosXSlider"
                                 Minimum="-100" Maximum="100"
                                 Value="0"
                                 TickFrequency="10"
                                 Margin="0,0,0,5"/>
 
-                        <Label x:Name="TextPosYLabel" Content="Text Pos Y: 0.00" Foreground="White"/>
+                        <Label x:Name="TextPosYLabel" Content="Scene Pos Y: 0.00" Foreground="White"/>
                         <Slider x:Name="TextPosYSlider"
                                 Minimum="-100" Maximum="100"
                                 Value="0"
                                 TickFrequency="10"
                                 Margin="0,0,0,5"/>
 
-                        <Label x:Name="TextPosZLabel" Content="Text Pos Z: 0.00" Foreground="White"/>
+                        <Label x:Name="TextPosZLabel" Content="Scene Pos Z: 0.00" Foreground="White"/>
                         <Slider x:Name="TextPosZSlider"
                                 Minimum="-100" Maximum="100"
                                 Value="0"
                                 TickFrequency="10"
                                 Margin="0,0,0,5"/>
 
-                        <Label Content="Text Rotation" Foreground="White" FontWeight="Bold" Margin="0,10,0,0"/>
-                        <Label x:Name="TextPitchLabel" Content="Text Pitch: 0°" Foreground="White"/>
+                        <Label Content="Scene Rotation" Foreground="White" FontWeight="Bold" Margin="0,10,0,0"/>
+                        <Label x:Name="TextPitchLabel" Content="Scene Pitch: 0°" Foreground="White"/>
                         <Slider x:Name="TextPitchSlider"
                                 Minimum="-180" Maximum="180"
                                 Value="0"
                                 TickFrequency="45"
                                 Margin="0,0,0,5"/>
 
-                        <Label x:Name="TextRollLabel" Content="Text Roll: 0°" Foreground="White"/>
+                        <Label x:Name="TextRollLabel" Content="Scene Roll: 0°" Foreground="White"/>
                         <Slider x:Name="TextRollSlider"
                                 Minimum="-180" Maximum="180"
                                 Value="0"
                                 TickFrequency="45"
                                 Margin="0,0,0,5"/>
 
-                        <Label x:Name="TextYawLabel" Content="Text Yaw: 0°" Foreground="White"/>
+                        <Label x:Name="TextYawLabel" Content="Scene Yaw: 0°" Foreground="White"/>
                         <Slider x:Name="TextYawSlider"
                                 Minimum="-180" Maximum="180"
                                 Value="0"
