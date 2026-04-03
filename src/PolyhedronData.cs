@@ -16,11 +16,13 @@ public static class PolyhedronLibrary
         return pts.Select(p => new Point3D(p.X / max, p.Y / max, p.Z / max)).ToArray();
     }
 
-    private static int[][] ComputeFacesFromEdges(int[][] edges, int vertexCount)
+    private static int[][] ComputeFacesFromEdges(int[][] edges, Point3D[] vertices)
     {
+        int n = vertices.Length;
+
         // Build adjacency list
-        var adjacency = new Dictionary<int, HashSet<int>>();
-        for (int i = 0; i < vertexCount; i++) adjacency[i] = new HashSet<int>();
+        var adjacency = new List<int>[n];
+        for (int i = 0; i < n; i++) adjacency[i] = new List<int>();
         foreach (var edge in edges)
         {
             if (edge.Length < 2) continue;
@@ -28,74 +30,141 @@ public static class PolyhedronLibrary
             adjacency[edge[1]].Add(edge[0]);
         }
 
-        // Find all minimal cycles (faces)
+        // Compute centroid for angle sorting
+        double cx = 0, cy = 0, cz = 0;
+        foreach (var v in vertices) { cx += v.X; cy += v.Y; cz += v.Z; }
+        cx /= n; cy /= n; cz /= n;
+
+        // Sort neighbors by angle around centroid
+        var angles = new Dictionary<int, double>();
+        for (int v = 0; v < n; v++)
+            angles[v] = Math.Atan2(vertices[v].Y - cy, vertices[v].X - cx);
+        for (int v = 0; v < n; v++)
+            adjacency[v].Sort((a, b) => angles[a].CompareTo(angles[b]));
+
+        // Find faces by walking around each vertex's neighbor fan
         var visitedEdges = new HashSet<(int, int)>();
         var faces = new List<int[]>();
 
-        for (int start = 0; start < vertexCount; start++)
+        for (int v = 0; v < n; v++)
         {
-            foreach (int next in adjacency[start])
+            int deg = adjacency[v].Count;
+            for (int i = 0; i < deg; i++)
             {
-                var key = (Math.Min(start, next), Math.Max(start, next));
-                if (visitedEdges.Contains(key)) continue;
+                int v1 = adjacency[v][i];
+                int v2 = adjacency[v][(i + 1) % deg];
+                var e1 = (Math.Min(v, v1), Math.Max(v, v1));
+                var e2 = (Math.Min(v, v2), Math.Max(v, v2));
+                if (visitedEdges.Contains(e1) || visitedEdges.Contains(e2)) continue;
 
-                // Try to find a cycle starting with edge (start, next)
-                var cycle = TryFindFaceCycle(start, next, adjacency, visitedEdges);
-                if (cycle != null && cycle.Length >= 3)
-                {
-                    faces.Add(cycle);
-                }
+                var face = WalkFace(vertices, adjacency, v, v1, v2, visitedEdges);
+                if (face != null && face.Length >= 3) faces.Add(face);
             }
         }
 
-        return faces.ToArray();
+        return DeduplicateFaces(faces);
     }
 
-    private static int[]? TryFindFaceCycle(int start, int next, Dictionary<int, HashSet<int>> adjacency, HashSet<(int, int)> visitedEdges)
+    private static int[] WalkFace(Point3D[] vertices, List<int>[] adjacency, int start, int v1, int v2, HashSet<(int, int)> visitedEdges)
     {
-        // DFS to find smallest cycle containing start->next
-        var path = new List<int> { start, next };
-        var edgeUsed = new HashSet<(int, int)> { (Math.Min(start, next), Math.Max(start, next)) };
-        var usedVertex = new HashSet<int> { start, next };
+        var face = new List<int> { start, v1, v2 };
+        visitedEdges.Add((Math.Min(start, v1), Math.Max(start, v1)));
+        visitedEdges.Add((Math.Min(v1, v2), Math.Max(v1, v2)));
 
-        var stack = new Stack<(int current, int prev)>();
-        stack.Push((next, start));
-
-        while (stack.Count > 0)
+        bool expanded = true;
+        while (expanded)
         {
-            var (current, prev) = stack.Pop();
+            expanded = false;
+            int len = face.Count;
 
-            foreach (int neighbor in adjacency[current])
+            for (int i = 0; i < len; i++)
             {
-                if (neighbor == prev) continue;
+                int prev = face[(i - 1 + len) % len];
+                int curr = face[i];
+                int next = face[(i + 1) % len];
 
-                var edgeKey = (Math.Min(current, neighbor), Math.Max(current, neighbor));
-
-                if (neighbor == start)
+                foreach (int cand in adjacency[curr])
                 {
-                    // Found a cycle back to start
-                    if (!edgeUsed.Contains(edgeKey))
+                    if (cand == prev || cand == next || face.Contains(cand)) continue;
+                    if (IsCoplanar(vertices, face, cand))
                     {
-                        var cycle = path.ToArray();
-                        foreach (var e in edgeUsed) visitedEdges.Add(e);
-                        return cycle;
+                        face.Insert(i + 1, cand);
+                        visitedEdges.Add((Math.Min(curr, cand), Math.Max(curr, cand)));
+                        expanded = true;
+                        len = face.Count;
+                        break;
                     }
                 }
-
-                if (!usedVertex.Contains(neighbor) && edgeUsed.Count < 10) // limit search depth
-                {
-                    usedVertex.Add(neighbor);
-                    edgeUsed.Add(edgeKey);
-                    path.Add(neighbor);
-                    stack.Push((neighbor, current));
-                }
             }
-
-            if (path.Count > 2 && path[^1] == next && path[^2] == start)
-                break;
         }
 
-        return null;
+        return face.ToArray();
+    }
+
+    private static bool IsCoplanar(Point3D[] vertices, List<int> face, int newIdx)
+    {
+        if (face.Count < 3) return true;
+        var p0 = vertices[face[0]];
+        var p1 = vertices[face[1]];
+        var p2 = vertices[face[2]];
+
+        double ax = p1.X - p0.X, ay = p1.Y - p0.Y, az = p1.Z - p0.Z;
+        double bx = p2.X - p0.X, by = p2.Y - p0.Y, bz = p2.Z - p0.Z;
+        double nx = ay * bz - az * by;
+        double ny = az * bx - ax * bz;
+        double nz = ax * by - ay * bx;
+        double len = Math.Sqrt(nx * nx + ny * ny + nz * nz);
+        if (len < 1e-10) return true;
+        nx /= len; ny /= len; nz /= len;
+
+        var pn = vertices[newIdx];
+        double dist = Math.Abs((pn.X - p0.X) * nx + (pn.Y - p0.Y) * ny + (pn.Z - p0.Z) * nz);
+        return dist < 0.01;
+    }
+
+    private static int[][] DeduplicateFaces(List<int[]> faces)
+    {
+        var unique = new HashSet<string>();
+        var result = new List<int[]>();
+        foreach (var f in faces)
+        {
+            var norm = NormalizeFace(f);
+            var key = string.Join(",", norm);
+            if (!unique.Contains(key)) { unique.Add(key); result.Add(norm); }
+        }
+        return result.ToArray();
+    }
+
+    private static int[] NormalizeFace(int[] face)
+    {
+        int n = face.Length;
+        var best = new int[n];
+        Array.Copy(face, best, n);
+
+        for (int rot = 0; rot < n; rot++)
+        {
+            var rotated = new int[n];
+            for (int i = 0; i < n; i++) rotated[i] = face[(rot + i) % n];
+
+            bool less = false;
+            for (int i = 0; i < n; i++)
+            {
+                if (rotated[i] < best[i]) { less = true; break; }
+                if (rotated[i] > best[i]) break;
+            }
+            if (less) { best = rotated; continue; }
+
+            var reversed = new int[n];
+            for (int i = 0; i < n; i++) reversed[i] = rotated[n - 1 - i];
+            less = false;
+            for (int i = 0; i < n; i++)
+            {
+                if (reversed[i] < best[i]) { less = true; break; }
+                if (reversed[i] > best[i]) break;
+            }
+            if (less) best = reversed;
+        }
+        return best;
     }
 
     // Data from finnp/polyhedra (George W. Hart's Virtual Polyhedra)
@@ -515,7 +584,7 @@ public static class PolyhedronLibrary
     public static PolyhedronData[] AllPolyhedra { get; } = RawData
         .Select(r => {
             var verts = NormalizeVertices(r.verts);
-            var faces = ComputeFacesFromEdges(r.edges, verts.Length);
+            var faces = ComputeFacesFromEdges(r.edges, verts);
             return new PolyhedronData(r.name, verts, r.edges, faces);
         })
         .ToArray();
