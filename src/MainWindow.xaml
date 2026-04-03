@@ -1,0 +1,156 @@
+<Window x:Class="TextBouncer.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:hx="clr-namespace:HelixToolkit.Wpf;assembly=HelixToolkit.Wpf"
+        Title="3D Text Bouncer" Height="720" Width="1280"
+        Background="#1e1e1e"
+        WindowStartupLocation="CenterScreen">
+    <DockPanel>
+        <!-- Side panel (WPF controls) -->
+        <Border DockPanel.Dock="Left" Width="420" Background="#282828" Padding="10">
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <StackPanel>
+                    <!-- Text Input -->
+                    <TextBox x:Name="TextInputBox"
+                             Text="HELLO"
+                             FontSize="14"
+                             Padding="5"
+                             Margin="0,5,0,10"
+                             TextChanged="OnTextInputChanged"/>
+
+                    <!-- Color picker -->
+                    <Button x:Name="ColorButton"
+                            Content="Choose Color"
+                            Click="OnColorButtonClick"
+                            Height="28"
+                            Margin="0,0,0,5"/>
+                    <Label x:Name="ColorLabel"
+                           Content="Color: White"
+                           Foreground="White"
+                           Margin="0,0,0,15"/>
+
+                    <!-- Particle count slider -->
+                    <Label x:Name="ParticleCountLabel"
+                           Content="Particles: 10,000"
+                           Foreground="White"/>
+                    <Slider x:Name="ParticleCountSlider"
+                            Minimum="1000" Maximum="100000"
+                            Value="10000"
+                            TickFrequency="10000"
+                            IsSnapToTickEnabled="True"
+                            Margin="0,0,0,15"
+                            ValueChanged="OnParticleCountChanged"/>
+
+                    <!-- Particle size slider -->
+                    <Label x:Name="ParticleSizeLabel"
+                           Content="Size: 4px"
+                           Foreground="White"/>
+                    <Slider x:Name="ParticleSizeSlider"
+                            Minimum="1" Maximum="10"
+                            Value="4"
+                            TickFrequency="1"
+                            IsSnapToTickEnabled="True"
+                            Margin="0,0,0,15"
+                            ValueChanged="OnParticleSizeChanged"/>
+
+                    <!-- Box opacity slider -->
+                    <Label x:Name="BoxOpacityLabel"
+                           Content="Box Opacity: 40%"
+                           Foreground="White"/>
+                    <Slider x:Name="BoxOpacitySlider"
+                            Minimum="0" Maximum="100"
+                            Value="40"
+                            TickFrequency="10"
+                            IsSnapToTickEnabled="True"
+                            Margin="0,0,0,15"
+                            ValueChanged="OnBoxOpacityChanged"/>
+
+                    <!-- Mode selection -->
+                    <GroupBox Header="Mode" Foreground="White" Margin="0,0,0,10">
+                        <StackPanel>
+                            <RadioButton x:Name="AutoRadio"
+                                        Content="Automatic"
+                                        Foreground="White"
+                                        IsChecked="True"
+                                        Checked="OnModeChanged"
+                                        Margin="0,5,0,0"/>
+                            <RadioButton x:Name="ManualRadio"
+                                         Content="Manual"
+                                         Foreground="White"
+                                         Checked="OnModeChanged"
+                                         Margin="0,5,0,0"/>
+                            <RadioButton x:Name="MixRadio"
+                                         Content="Mix"
+                                         Foreground="White"
+                                         Checked="OnModeChanged"
+                                         Margin="0,5,0,0"/>
+                        </StackPanel>
+                    </GroupBox>
+
+                    <!-- Position controls -->
+                    <Label x:Name="PosXLabel" Content="Cam Pos X: 1.75" Foreground="White"/>
+                    <Slider x:Name="PosXSlider"
+                            Minimum="-500" Maximum="500"
+                            Value="175"
+                            TickFrequency="100"
+                            Margin="0,0,0,5"
+                            ValueChanged="OnPositionChanged"/>
+
+                    <Label x:Name="PosYLabel" Content="Cam Pos Y: 1.25" Foreground="White"/>
+                    <Slider x:Name="PosYSlider"
+                            Minimum="-500" Maximum="500"
+                            Value="125"
+                            TickFrequency="100"
+                            Margin="0,0,0,5"
+                            ValueChanged="OnPositionChanged"/>
+
+                    <Label x:Name="PosZLabel" Content="Cam Pos Z: 2.50" Foreground="White"/>
+                    <Slider x:Name="PosZSlider"
+                            Minimum="-1000" Maximum="1000"
+                            Value="250"
+                            TickFrequency="200"
+                            Margin="0,0,0,5"
+                            ValueChanged="OnPositionChanged"/>
+
+                    <!-- Rotation controls -->
+                    <Label x:Name="PitchLabel" Content="Cam Pitch: 0°" Foreground="White"/>
+                    <Slider x:Name="PitchSlider"
+                            Minimum="-180" Maximum="180"
+                            Value="0"
+                            TickFrequency="45"
+                            Margin="0,0,0,5"
+                            ValueChanged="OnRotationChanged"/>
+
+                    <Label x:Name="RollLabel" Content="Cam Roll: 0°" Foreground="White"/>
+                    <Slider x:Name="RollSlider"
+                            Minimum="-180" Maximum="180"
+                            Value="0"
+                            TickFrequency="45"
+                            Margin="0,0,0,5"
+                            ValueChanged="OnRotationChanged"/>
+
+                    <Label x:Name="YawLabel" Content="Cam Yaw: 0°" Foreground="White"/>
+                    <Slider x:Name="YawSlider"
+                            Minimum="-180" Maximum="180"
+                            Value="0"
+                            TickFrequency="45"
+                            Margin="0,0,0,5"
+                            ValueChanged="OnRotationChanged"/>
+                </StackPanel>
+            </ScrollViewer>
+        </Border>
+
+        <!-- Helix 3D viewport (fills remaining space) -->
+        <hx:HelixViewport3D x:Name="Viewport"
+                           Background="#6378c8"
+                           ShowCoordinateSystem="True"
+                           ZoomExtentsWhenLoaded="True">
+            <hx:DefaultLights/>
+
+            <!-- Box wireframe (12 edges) -->
+            <hx:LinesVisual3D x:Name="BoxWireframe"
+                              Color="White"
+                              Thickness="2"/>
+        </hx:HelixViewport3D>
+    </DockPanel>
+</Window>

@@ -1,0 +1,320 @@
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Media;
+using System.Windows.Media.Media3D;
+using System.Windows.Threading;
+using HelixToolkit.Wpf;
+using SkiaSharp;
+using OpenTKMath = OpenTK.Mathematics;
+using Color = System.Windows.Media.Color;
+
+namespace TextBouncer;
+
+public partial class MainWindow : Window
+{
+    // Text rasterization
+    private TextRasterizer _textRasterizer = new();
+    private SKBitmap? _currentTextBitmap;
+    private ParticleGenerator _particleGenerator = new();
+
+    // Helix viewport visuals
+    private PointsVisual3D? _particlesVisual;
+
+    // Current state
+    private Color _currentTextColor = Colors.White;
+    private int _currentParticleCount = 10000;
+    private float _currentParticleSize = 4.0f;
+    private ParticleData[]? _particleData;
+
+    // Physics
+    private PhysicsSimulator _physics = new();
+    private DispatcherTimer _renderTimer = null!;
+    private long _lastFrameTime;
+    private System.Diagnostics.Stopwatch _stopwatch = null!;
+
+    public MainWindow()
+    {
+        InitializeComponent();
+        SetupParticlesVisual();
+        SetupRenderLoop();
+        InitializeBoxWireframe();
+        RegenerateParticles();
+    }
+
+    private void SetupParticlesVisual()
+    {
+        _particlesVisual = new PointsVisual3D();
+        Viewport.Children.Add(_particlesVisual);
+    }
+
+    private void InitializeBoxWireframe()
+    {
+        // 12 edges of cube from GLHost.InitializeBoxGeometry()
+        var points = new Point3DCollection
+        {
+            // Front face
+            new Point3D(-1, -1,  1), new Point3D( 1, -1,  1),
+            new Point3D( 1, -1,  1), new Point3D( 1,  1,  1),
+            new Point3D( 1,  1,  1), new Point3D(-1,  1,  1),
+            new Point3D(-1,  1,  1), new Point3D(-1, -1,  1),
+            // Back face
+            new Point3D(-1, -1, -1), new Point3D( 1, -1, -1),
+            new Point3D( 1, -1, -1), new Point3D( 1,  1, -1),
+            new Point3D( 1,  1, -1), new Point3D(-1,  1, -1),
+            new Point3D(-1,  1, -1), new Point3D(-1, -1, -1),
+            // Connecting edges
+            new Point3D(-1, -1,  1), new Point3D(-1, -1, -1),
+            new Point3D( 1, -1,  1), new Point3D( 1, -1, -1),
+            new Point3D( 1,  1,  1), new Point3D( 1,  1, -1),
+            new Point3D(-1,  1,  1), new Point3D(-1,  1, -1),
+        };
+        BoxWireframe.Points = points;
+    }
+
+    private void SetupRenderLoop()
+    {
+        _stopwatch = System.Diagnostics.Stopwatch.StartNew();
+        _lastFrameTime = _stopwatch.ElapsedTicks;
+
+        _renderTimer = new DispatcherTimer
+        {
+            Interval = TimeSpan.FromMilliseconds(16)
+        };
+        _renderTimer.Tick += OnRenderTick;
+        _renderTimer.Start();
+    }
+
+    private void OnRenderTick(object? sender, EventArgs e)
+    {
+        long currentTime = _stopwatch.ElapsedTicks;
+        float deltaTime = (float)(currentTime - _lastFrameTime) / System.Diagnostics.Stopwatch.Frequency;
+        _lastFrameTime = currentTime;
+        deltaTime = Math.Min(deltaTime, 0.1f);
+
+        if (_particleData != null && _particleData.Length > 0)
+        {
+            _physics.Update(deltaTime, _particleData);
+            UpdateParticleVisuals();
+        }
+    }
+
+    private void RegenerateParticles()
+    {
+        if (string.IsNullOrEmpty(TextInputBox.Text) || _textRasterizer == null)
+        {
+            _particleData = Array.Empty<ParticleData>();
+            UpdateParticleVisuals();
+            return;
+        }
+
+        var skColor = new SKColor(
+            _currentTextColor.R,
+            _currentTextColor.G,
+            _currentTextColor.B,
+            _currentTextColor.A);
+
+        _currentTextBitmap?.Dispose();
+        _currentTextBitmap = _textRasterizer.RenderText(
+            TextInputBox.Text,
+            width: 512,
+            height: 256,
+            textColor: skColor);
+
+        if (_currentTextBitmap == null)
+        {
+            _particleData = Array.Empty<ParticleData>();
+            UpdateParticleVisuals();
+            return;
+        }
+
+        var particleColor = new OpenTKMath.Vector4(
+            _currentTextColor.R / 255f,
+            _currentTextColor.G / 255f,
+            _currentTextColor.B / 255f,
+            1.0f);
+
+        ParticleData[] particles = _particleGenerator.GenerateParticles(
+            _currentTextBitmap,
+            _currentParticleCount,
+            particleColor);
+
+        _particleData = particles;
+        UpdateParticleVisuals();
+    }
+
+    private void UpdateParticleVisuals()
+    {
+        if (_particlesVisual == null || _particleData == null)
+            return;
+
+        var points = new Point3DCollection();
+        Color firstColor = _currentTextColor;
+
+        for (int i = 0; i < _particleData.Length; i++)
+        {
+            var p = _particleData[i];
+            points.Add(new Point3D(p.Position.X, p.Position.Y, p.Position.Z));
+        }
+
+        _particlesVisual.Points = points;
+        _particlesVisual.Color = firstColor;
+    }
+
+    private void SetParticleColor()
+    {
+        if (_particleData == null) return;
+        var newColor = new OpenTKMath.Vector4(
+            _currentTextColor.R / 255f,
+            _currentTextColor.G / 255f,
+            _currentTextColor.B / 255f,
+            1.0f);
+
+        for (int i = 0; i < _particleData.Length; i++)
+        {
+            _particleData[i] = new ParticleData(
+                _particleData[i].Position,
+                _particleData[i].Velocity,
+                newColor);
+        }
+        UpdateParticleVisuals();
+    }
+
+    // --- UI Event Handlers ---
+
+    private void OnColorButtonClick(object sender, RoutedEventArgs e)
+    {
+        var dialog = new System.Windows.Forms.ColorDialog
+        {
+            FullOpen = true
+        };
+
+        if (dialog.ShowDialog() == System.Windows.Forms.DialogResult.OK)
+        {
+            _currentTextColor = Color.FromArgb(
+                dialog.Color.A,
+                dialog.Color.R,
+                dialog.Color.G,
+                dialog.Color.B);
+            ColorLabel.Content = $"Color: {dialog.Color.Name}";
+            ColorButton.Background = new SolidColorBrush(_currentTextColor);
+            double brightness = (dialog.Color.R * 0.299 + dialog.Color.G * 0.587 + dialog.Color.B * 0.114) / 255;
+            ColorButton.Foreground = new SolidColorBrush(brightness > 0.5 ? Colors.Black : Colors.White);
+            SetParticleColor();
+        }
+    }
+
+    private void OnTextInputChanged(object sender, TextChangedEventArgs e)
+    {
+        RegenerateParticles();
+    }
+
+    private void OnParticleCountChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        if (ParticleCountLabel == null) return;
+        _currentParticleCount = (int)ParticleCountSlider.Value;
+        ParticleCountLabel.Content = $"Particles: {_currentParticleCount:N0}";
+        RegenerateParticles();
+    }
+
+    private void OnParticleSizeChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        if (ParticleSizeLabel == null) return;
+        _currentParticleSize = (float)ParticleSizeSlider.Value;
+        ParticleSizeLabel.Content = $"Size: {_currentParticleSize}px";
+    }
+
+    private void OnBoxOpacityChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        if (BoxOpacityLabel == null) return;
+        float opacity = (float)(BoxOpacitySlider.Value / 100.0);
+        BoxOpacityLabel.Content = $"Box Opacity: {BoxOpacitySlider.Value}%";
+        BoxWireframe.Color = Color.FromArgb(
+            (byte)(opacity * 255),
+            255, 255, 255);
+    }
+
+    private void OnModeChanged(object sender, RoutedEventArgs e)
+    {
+        ControlMode mode = ControlMode.Automatic;
+        if (ManualRadio.IsChecked == true)
+            mode = ControlMode.Manual;
+        else if (MixRadio.IsChecked == true)
+            mode = ControlMode.Mixture;
+
+        _physics.Mode = mode;
+    }
+
+    private void OnPositionChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        if (PosXLabel == null) return;
+        float x = (float)(PosXSlider.Value / 100.0);
+        float y = (float)(PosYSlider.Value / 100.0);
+        float z = (float)(PosZSlider.Value / 100.0);
+
+        PosXLabel.Content = $"Cam Pos X: {x:F2}";
+        PosYLabel.Content = $"Cam Pos Y: {y:F2}";
+        PosZLabel.Content = $"Cam Pos Z: {z:F2}";
+
+        if (Viewport.Camera is PerspectiveCamera cam)
+        {
+            cam.Position = new Point3D(x, y, z);
+        }
+    }
+
+    private void OnRotationChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        if (PitchLabel == null) return;
+        float pitch = (float)PitchSlider.Value;
+        float roll = (float)RollSlider.Value;
+        float yaw = (float)YawSlider.Value;
+
+        PitchLabel.Content = $"Cam Pitch: {pitch}°";
+        RollLabel.Content = $"Cam Roll: {roll}°";
+        YawLabel.Content = $"Cam Yaw: {yaw}°";
+
+        if (Viewport.Camera is PerspectiveCamera cam)
+        {
+            double pitchRad = pitch * Math.PI / 180.0;
+            double yawRad = yaw * Math.PI / 180.0;
+            double rollRad = roll * Math.PI / 180.0;
+
+            var lookDir = new Vector3D(0, 0, -1);
+            var upDir = new Vector3D(0, 1, 0);
+
+            var rotated = RotateVector(lookDir, upDir, yawRad);
+            rotated = RotateVector(rotated, new Vector3D(1, 0, 0), pitchRad);
+
+            cam.LookDirection = rotated;
+            cam.UpDirection = RotateVector(upDir, new Vector3D(1, 0, 0), rollRad);
+        }
+    }
+
+    private static Vector3D RotateVector(Vector3D v, Vector3D axis, double angle)
+    {
+        double cos = Math.Cos(angle);
+        double sin = Math.Sin(angle);
+        double t = 1.0 - cos;
+
+        double x = axis.X, y = axis.Y, z = axis.Z;
+
+        double resultX = (t * x * x + cos) * v.X
+            + (t * x * y - sin * z) * v.Y
+            + (t * x * z + sin * y) * v.Z;
+        double resultY = (t * x * y + sin * z) * v.X
+            + (t * y * y + cos) * v.Y
+            + (t * y * z - sin * x) * v.Z;
+        double resultZ = (t * x * z - sin * y) * v.X
+            + (t * y * z + sin * x) * v.Y
+            + (t * z * z + cos) * v.Z;
+
+        return new Vector3D(resultX, resultY, resultZ);
+    }
+
+    protected override void OnClosed(EventArgs e)
+    {
+        _renderTimer?.Stop();
+        _currentTextBitmap?.Dispose();
+        _textRasterizer?.Dispose();
+        base.OnClosed(e);
+    }
+}
