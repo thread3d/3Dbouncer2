@@ -2,21 +2,101 @@ using System.Windows.Media.Media3D;
 
 namespace TextBouncer;
 
-public record PolyhedronData(string Name, Point3D[] Vertices, int[][] Edges);
+public record PolyhedronData(string Name, Point3D[] Vertices, int[][] Edges, int[][] Faces);
 
 public static class PolyhedronLibrary
 {
     private static Point3D P(double x, double y, double z) => new(x, y, z);
     private static Point3D P(double[] arr) => new(arr[0], arr[1], arr[2]);
 
-    private static Point3D[] Normalize(double[][] vertices)
+    private static Point3D[] NormalizeVertices(double[][] vertices)
     {
         var pts = vertices.Select(v => P(v)).ToArray();
         double max = pts.Max(p => Math.Max(Math.Abs(p.X), Math.Max(Math.Abs(p.Y), Math.Abs(p.Z))));
         return pts.Select(p => new Point3D(p.X / max, p.Y / max, p.Z / max)).ToArray();
     }
 
-    private static int[][] ParseEdges(int[][] edges) => edges;
+    private static int[][] ComputeFacesFromEdges(int[][] edges, int vertexCount)
+    {
+        // Build adjacency list
+        var adjacency = new Dictionary<int, HashSet<int>>();
+        for (int i = 0; i < vertexCount; i++) adjacency[i] = new HashSet<int>();
+        foreach (var edge in edges)
+        {
+            if (edge.Length < 2) continue;
+            adjacency[edge[0]].Add(edge[1]);
+            adjacency[edge[1]].Add(edge[0]);
+        }
+
+        // Find all minimal cycles (faces)
+        var visitedEdges = new HashSet<(int, int)>();
+        var faces = new List<int[]>();
+
+        for (int start = 0; start < vertexCount; start++)
+        {
+            foreach (int next in adjacency[start])
+            {
+                var key = (Math.Min(start, next), Math.Max(start, next));
+                if (visitedEdges.Contains(key)) continue;
+
+                // Try to find a cycle starting with edge (start, next)
+                var cycle = TryFindFaceCycle(start, next, adjacency, visitedEdges);
+                if (cycle != null && cycle.Length >= 3)
+                {
+                    faces.Add(cycle);
+                }
+            }
+        }
+
+        return faces.ToArray();
+    }
+
+    private static int[]? TryFindFaceCycle(int start, int next, Dictionary<int, HashSet<int>> adjacency, HashSet<(int, int)> visitedEdges)
+    {
+        // DFS to find smallest cycle containing start->next
+        var path = new List<int> { start, next };
+        var edgeUsed = new HashSet<(int, int)> { (Math.Min(start, next), Math.Max(start, next)) };
+        var usedVertex = new HashSet<int> { start, next };
+
+        var stack = new Stack<(int current, int prev)>();
+        stack.Push((next, start));
+
+        while (stack.Count > 0)
+        {
+            var (current, prev) = stack.Pop();
+
+            foreach (int neighbor in adjacency[current])
+            {
+                if (neighbor == prev) continue;
+
+                var edgeKey = (Math.Min(current, neighbor), Math.Max(current, neighbor));
+
+                if (neighbor == start)
+                {
+                    // Found a cycle back to start
+                    if (!edgeUsed.Contains(edgeKey))
+                    {
+                        var cycle = path.ToArray();
+                        foreach (var e in edgeUsed) visitedEdges.Add(e);
+                        return cycle;
+                    }
+                }
+
+                if (!usedVertex.Contains(neighbor) && edgeUsed.Count < 10) // limit search depth
+                {
+                    usedVertex.Add(neighbor);
+                    edgeUsed.Add(edgeKey);
+                    path.Add(neighbor);
+                    stack.Push((neighbor, current));
+                }
+            }
+
+            if (path.Count > 2 && path[^1] == next && path[^2] == start)
+                break;
+        }
+
+        return null;
+    }
 
     // Data from finnp/polyhedra (George W. Hart's Virtual Polyhedra)
     private static readonly (string name, double[][] verts, int[][] edges)[] RawData =
@@ -433,7 +513,11 @@ public static class PolyhedronLibrary
     ];
 
     public static PolyhedronData[] AllPolyhedra { get; } = RawData
-        .Select(r => new PolyhedronData(r.name, Normalize(r.verts), r.edges))
+        .Select(r => {
+            var verts = NormalizeVertices(r.verts);
+            var faces = ComputeFacesFromEdges(r.edges, verts.Length);
+            return new PolyhedronData(r.name, verts, r.edges, faces);
+        })
         .ToArray();
 
     public static string GetName(int index) =>

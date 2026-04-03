@@ -32,7 +32,6 @@ public partial class MainWindow : Window
     // Polyhedron selection
     private int _currentPolyhedronIndex = 1;
     private PolyhedronData? _currentPolyhedronData;
-    private int[]? _currentFaceVertices; // vertices forming a valid face for the translucent grid
 
     // Box transform
     private Vector3D _boxOffset = new(0, 0, 0);
@@ -51,6 +50,9 @@ public partial class MainWindow : Window
 
     // Box face opacity
     private float _boxOpacity = 0.4f;
+
+    // Transparency mode: 0 = face only, 1 = whole polyhedron, 2 = wireframe only
+    private int _transparencyMode = 2;
 
     // Render loop
     private DispatcherTimer _renderTimer = null!;
@@ -112,6 +114,9 @@ public partial class MainWindow : Window
         PolyhedronSlider.ValueChanged += OnPolyhedronChanged;
         CameraControlRadio.Checked += OnControlTargetChanged;
         TextControlRadio.Checked += OnControlTargetChanged;
+        FaceTransparencyRadio.Checked += OnTransparencyModeChanged;
+        WholeTransparencyRadio.Checked += OnTransparencyModeChanged;
+        WireframeOnlyRadio.Checked += OnTransparencyModeChanged;
         // Camera controls
         PosXSlider.ValueChanged += OnPositionChanged;
         PosYSlider.ValueChanged += OnPositionChanged;
@@ -316,44 +321,6 @@ public partial class MainWindow : Window
     {
         if (_particlesVisual == null || _particleLocalPositions == null) return;
 
-        // Find a valid face from the edge structure for the translucent face grid
-        _currentFaceVertices = null;
-        if (_currentPolyhedronData != null && _currentPolyhedronData.Edges.Length > 0)
-        {
-            var adjacency = new Dictionary<int, HashSet<int>>();
-            foreach (var edge in _currentPolyhedronData.Edges)
-            {
-                if (!adjacency.ContainsKey(edge[0])) adjacency[edge[0]] = new HashSet<int>();
-                if (!adjacency.ContainsKey(edge[1])) adjacency[edge[1]] = new HashSet<int>();
-                adjacency[edge[0]].Add(edge[1]);
-                adjacency[edge[1]].Add(edge[0]);
-            }
-
-            // Find all minimal cycles (faces) by walking edge loops
-            var visited = new HashSet<(int, int)>();
-            var foundFaces = new List<int[]>();
-
-            foreach (var kvp in adjacency)
-            {
-                int start = kvp.Key;
-                foreach (int next in kvp.Value)
-                {
-                    // Try to find a cycle starting with edge (start, next)
-                    var cycle = TryFindCycle(start, next, adjacency, visited);
-                    if (cycle != null && cycle.Length >= 3)
-                    {
-                        foundFaces.Add(cycle);
-                    }
-                }
-            }
-
-            // Pick the first valid face found
-            if (foundFaces.Count > 0)
-            {
-                _currentFaceVertices = foundFaces[0];
-            }
-        }
-
         // Update box wireframe using current polyhedron
         if (_boxWireframe != null && _currentPolyhedronData != null)
         {
@@ -371,65 +338,84 @@ public partial class MainWindow : Window
             _boxWireframe.Points = wireframePoints;
         }
 
-        // Update translucent face mesh
+        // Update translucent face(s) mesh
         if (_boxFace != null && _currentPolyhedronData != null && _currentPolyhedronData.Vertices.Length >= 3)
         {
-            if (_currentFaceVertices != null && _currentFaceVertices.Length >= 3)
+            var faces = _currentPolyhedronData.Faces;
+            if (faces != null && faces.Length > 0)
             {
-                // Reorder vertices by angle around centroid so they form a proper polygon
-                var centroid = new Point3D(0, 0, 0);
-                foreach (int idx in _currentFaceVertices)
-                {
-                    var v = _currentPolyhedronData.Vertices[idx];
-                    centroid.X += v.X;
-                    centroid.Y += v.Y;
-                    centroid.Z += v.Z;
-                }
-                centroid.X /= _currentFaceVertices.Length;
-                centroid.Y /= _currentFaceVertices.Length;
-                centroid.Z /= _currentFaceVertices.Length;
-
-                // Sort by angle in XY plane (looking down Z axis)
-                var sorted = _currentFaceVertices
-                    .Select(idx => new {
-                        idx,
-                        angle = Math.Atan2(
-                            _currentPolyhedronData.Vertices[idx].Y - centroid.Y,
-                            _currentPolyhedronData.Vertices[idx].X - centroid.X)
-                    })
-                    .OrderBy(x => x.angle)
-                    .Select(x => x.idx)
-                    .ToArray();
-
-                int n = sorted.Length;
-
-                // Create mesh with triangle fan from centroid
-                var mesh = new MeshGeometry3D();
-                int triCount = n; // number of triangles
-
-                for (int i = 0; i < triCount; i++)
-                {
-                    int i1 = sorted[i];
-                    int i2 = sorted[(i + 1) % n];
-                    var v0 = ApplyBoxTransform(centroid);
-                    var v1 = ApplyBoxTransform(_currentPolyhedronData.Vertices[i1]);
-                    var v2 = ApplyBoxTransform(_currentPolyhedronData.Vertices[i2]);
-
-                    int baseIndex = mesh.Positions.Count;
-                    mesh.Positions.Add(v0);
-                    mesh.Positions.Add(v1);
-                    mesh.Positions.Add(v2);
-                    mesh.TriangleIndices.Add(baseIndex);
-                    mesh.TriangleIndices.Add(baseIndex + 1);
-                    mesh.TriangleIndices.Add(baseIndex + 2);
-                }
-
                 byte alpha = (byte)(_boxOpacity * 255);
                 var material = new DiffuseMaterial(new SolidColorBrush(Color.FromArgb(alpha, 255, 255, 255)));
-                var geometryModel = new GeometryModel3D(mesh, material);
-                geometryModel.BackMaterial = material; // Double-sided
 
-                _boxFace.Content = geometryModel;
+                // Determine which faces to render
+                int[][] facesToRender;
+                if (_transparencyMode == 0)
+                    facesToRender = new int[][] { faces[0] };  // Single face only
+                else if (_transparencyMode == 1)
+                    facesToRender = faces;                     // All faces
+                else
+                    facesToRender = Array.Empty<int[]>();     // Wireframe only - no faces
+
+                // Create a Model3DGroup to hold all face models
+                var modelGroup = new Model3DGroup();
+
+                foreach (var faceIndices in facesToRender)
+                {
+                    if (faceIndices.Length < 3) continue;
+
+                    // Reorder vertices by angle around centroid so they form a proper polygon
+                    var centroid = new Point3D(0, 0, 0);
+                    foreach (int idx in faceIndices)
+                    {
+                        var v = _currentPolyhedronData.Vertices[idx];
+                        centroid.X += v.X;
+                        centroid.Y += v.Y;
+                        centroid.Z += v.Z;
+                    }
+                    centroid.X /= faceIndices.Length;
+                    centroid.Y /= faceIndices.Length;
+                    centroid.Z /= faceIndices.Length;
+
+                    // Sort by angle in XY plane (looking down Z axis)
+                    var sorted = faceIndices
+                        .Select(idx => new {
+                            idx,
+                            angle = Math.Atan2(
+                                _currentPolyhedronData.Vertices[idx].Y - centroid.Y,
+                                _currentPolyhedronData.Vertices[idx].X - centroid.X)
+                        })
+                        .OrderBy(x => x.angle)
+                        .Select(x => x.idx)
+                        .ToArray();
+
+                    int n = sorted.Length;
+
+                    // Create mesh with triangle fan from centroid
+                    var mesh = new MeshGeometry3D();
+
+                    for (int i = 0; i < n; i++)
+                    {
+                        int i1 = sorted[i];
+                        int i2 = sorted[(i + 1) % n];
+                        var v0 = ApplyBoxTransform(centroid);
+                        var v1 = ApplyBoxTransform(_currentPolyhedronData.Vertices[i1]);
+                        var v2 = ApplyBoxTransform(_currentPolyhedronData.Vertices[i2]);
+
+                        int baseIndex = mesh.Positions.Count;
+                        mesh.Positions.Add(v0);
+                        mesh.Positions.Add(v1);
+                        mesh.Positions.Add(v2);
+                        mesh.TriangleIndices.Add(baseIndex);
+                        mesh.TriangleIndices.Add(baseIndex + 1);
+                        mesh.TriangleIndices.Add(baseIndex + 2);
+                    }
+
+                    var geometryModel = new GeometryModel3D(mesh, material);
+                    geometryModel.BackMaterial = material; // Double-sided
+                    modelGroup.Children.Add(geometryModel);
+                }
+
+                _boxFace.Content = modelGroup;
             }
         }
 
@@ -443,49 +429,6 @@ public partial class MainWindow : Window
 
         _particlesVisual.Points = points;
         _particlesVisual.Color = _currentTextColor;
-    }
-
-    // Find a minimal cycle (face) starting from edge (start, next) in the adjacency graph
-    private static int[]? TryFindCycle(int start, int next, Dictionary<int, HashSet<int>> adjacency, HashSet<(int, int)> visited)
-    {
-        // Don't visit same directed edge twice
-        if (!visited.Add((start, next))) return null;
-
-        var path = new List<int> { start, next };
-        int current = next;
-
-        for (int step = 0; step < 20; step++) // max 20 vertices in a face
-        {
-            var neighbors = adjacency[current];
-            int? nextVertex = null;
-
-            foreach (int candidate in neighbors)
-            {
-                if (candidate == start && path.Count >= 3)
-                {
-                    // Found a cycle back to start with at least 3 vertices
-                    return path.ToArray();
-                }
-                if (candidate != path[^1]) // don't go back on same edge
-                {
-                    nextVertex = candidate;
-                }
-            }
-
-            if (nextVertex == null) return null;
-
-            int nv = nextVertex.Value;
-            // Avoid immediately returning to the vertex before previous (prevent 2-cycle)
-            if (path.Count >= 2 && nv == path[^2])
-            {
-                return null;
-            }
-
-            path.Add(nv);
-            current = nv;
-        }
-
-        return null;
     }
 
     private void RegenerateParticles()
@@ -587,6 +530,17 @@ public partial class MainWindow : Window
         if (BoxOpacityLabel == null) return;
         _boxOpacity = (float)(BoxOpacitySlider.Value / 100.0);
         BoxOpacityLabel.Content = $"Box Face Opacity: {BoxOpacitySlider.Value}%";
+    }
+
+    private void OnTransparencyModeChanged(object sender, RoutedEventArgs e)
+    {
+        if (FaceTransparencyRadio == null) return;
+        if (FaceTransparencyRadio.IsChecked == true)
+            _transparencyMode = 0;
+        else if (WholeTransparencyRadio.IsChecked == true)
+            _transparencyMode = 1;
+        else
+            _transparencyMode = 2;
     }
 
     private void OnPolyhedronChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
