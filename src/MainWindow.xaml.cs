@@ -63,12 +63,22 @@ public partial class MainWindow : Window
         AutoRadio.Checked += OnModeChanged;
         ManualRadio.Checked += OnModeChanged;
         MixRadio.Checked += OnModeChanged;
+        CameraControlRadio.Checked += OnControlTargetChanged;
+        TextControlRadio.Checked += OnControlTargetChanged;
+        // Camera controls
         PosXSlider.ValueChanged += OnPositionChanged;
         PosYSlider.ValueChanged += OnPositionChanged;
         PosZSlider.ValueChanged += OnPositionChanged;
         PitchSlider.ValueChanged += OnRotationChanged;
         RollSlider.ValueChanged += OnRotationChanged;
         YawSlider.ValueChanged += OnRotationChanged;
+        // Text controls
+        TextPosXSlider.ValueChanged += OnTextPositionChanged;
+        TextPosYSlider.ValueChanged += OnTextPositionChanged;
+        TextPosZSlider.ValueChanged += OnTextPositionChanged;
+        TextPitchSlider.ValueChanged += OnTextRotationChanged;
+        TextRollSlider.ValueChanged += OnTextRotationChanged;
+        TextYawSlider.ValueChanged += OnTextRotationChanged;
     }
 
     private void SetupParticlesVisual()
@@ -333,6 +343,53 @@ public partial class MainWindow : Window
     private void OnModeChanged(object sender, RoutedEventArgs e)
     {
         // Mode changes don't affect text bouncing in this implementation
+    }
+
+    private void OnControlTargetChanged(object sender, RoutedEventArgs e)
+    {
+        if (CameraControlRadio == null || TextControlRadio == null) return;
+        if (CameraControlsPanel == null || TextControlsPanel == null) return;
+
+        if (CameraControlRadio.IsChecked == true)
+        {
+            CameraControlsPanel.Visibility = Visibility.Visible;
+            TextControlsPanel.Visibility = Visibility.Collapsed;
+        }
+        else
+        {
+            CameraControlsPanel.Visibility = Visibility.Collapsed;
+            TextControlsPanel.Visibility = Visibility.Visible;
+        }
+    }
+
+    private void OnTextPositionChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        if (TextPosXLabel == null) return;
+        double x = TextPosXSlider.Value / 100.0;
+        double y = TextPosYSlider.Value / 100.0;
+        double z = TextPosZSlider.Value / 100.0;
+
+        TextPosXLabel.Content = $"Text Pos X: {x:F2}";
+        TextPosYLabel.Content = $"Text Pos Y: {y:F2}";
+        TextPosZLabel.Content = $"Text Pos Z: {z:F2}";
+
+        _textOffset = new Vector3D(x, y, z);
+    }
+
+    private void OnTextRotationChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        if (TextPitchLabel == null) return;
+        double pitch = TextPitchSlider.Value;
+        double roll = TextRollSlider.Value;
+        double yaw = TextYawSlider.Value;
+
+        TextPitchLabel.Content = $"Text Pitch: {pitch:F0}°";
+        TextRollLabel.Content = $"Text Roll: {roll:F0}°";
+        TextYawLabel.Content = $"Text Yaw: {yaw:F0}°";
+
+        _textPitch = pitch;
+        _textRoll = roll;
+        _textYaw = yaw;
     }
 
     private void OnPositionChanged(object sender, RoutedPropertyChangedEventArgs<double> e)

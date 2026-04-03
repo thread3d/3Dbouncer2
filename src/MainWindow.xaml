@@ -79,49 +79,116 @@
                         </StackPanel>
                     </GroupBox>
 
-                    <!-- Position controls -->
-                    <Label x:Name="PosXLabel" Content="Cam Pos X: 1.75" Foreground="White"/>
-                    <Slider x:Name="PosXSlider"
-                            Minimum="-500" Maximum="500"
-                            Value="175"
-                            TickFrequency="100"
-                            Margin="0,0,0,5"/>
+                    <!-- Control target toggle (Camera vs Text) -->
+                    <GroupBox Header="Control Target" Foreground="White" Margin="0,0,0,10">
+                        <StackPanel>
+                            <RadioButton x:Name="CameraControlRadio"
+                                        Content="Camera"
+                                        Foreground="White"
+                                        IsChecked="True"
+                                        Checked="OnControlTargetChanged"
+                                        Margin="0,5,0,0"/>
+                            <RadioButton x:Name="TextControlRadio"
+                                         Content="Text"
+                                         Foreground="White"
+                                         Checked="OnControlTargetChanged"
+                                         Margin="0,5,0,0"/>
+                        </StackPanel>
+                    </GroupBox>
 
-                    <Label x:Name="PosYLabel" Content="Cam Pos Y: 1.25" Foreground="White"/>
-                    <Slider x:Name="PosYSlider"
-                            Minimum="-500" Maximum="500"
-                            Value="125"
-                            TickFrequency="100"
-                            Margin="0,0,0,5"/>
+                    <!-- Camera controls -->
+                    <StackPanel x:Name="CameraControlsPanel">
+                        <Label Content="Camera Position" Foreground="White" FontWeight="Bold"/>
+                        <Label x:Name="PosXLabel" Content="Cam Pos X: 1.75" Foreground="White"/>
+                        <Slider x:Name="PosXSlider"
+                                Minimum="-500" Maximum="500"
+                                Value="175"
+                                TickFrequency="100"
+                                Margin="0,0,0,5"/>
 
-                    <Label x:Name="PosZLabel" Content="Cam Pos Z: 2.50" Foreground="White"/>
-                    <Slider x:Name="PosZSlider"
-                            Minimum="-1000" Maximum="1000"
-                            Value="250"
-                            TickFrequency="200"
-                            Margin="0,0,0,5"/>
+                        <Label x:Name="PosYLabel" Content="Cam Pos Y: 1.25" Foreground="White"/>
+                        <Slider x:Name="PosYSlider"
+                                Minimum="-500" Maximum="500"
+                                Value="125"
+                                TickFrequency="100"
+                                Margin="0,0,0,5"/>
 
-                    <!-- Rotation controls -->
-                    <Label x:Name="PitchLabel" Content="Cam Pitch: 0°" Foreground="White"/>
-                    <Slider x:Name="PitchSlider"
-                            Minimum="-180" Maximum="180"
-                            Value="0"
-                            TickFrequency="45"
-                            Margin="0,0,0,5"/>
+                        <Label x:Name="PosZLabel" Content="Cam Pos Z: 2.50" Foreground="White"/>
+                        <Slider x:Name="PosZSlider"
+                                Minimum="-1000" Maximum="1000"
+                                Value="250"
+                                TickFrequency="200"
+                                Margin="0,0,0,5"/>
 
-                    <Label x:Name="RollLabel" Content="Cam Roll: 0°" Foreground="White"/>
-                    <Slider x:Name="RollSlider"
-                            Minimum="-180" Maximum="180"
-                            Value="0"
-                            TickFrequency="45"
-                            Margin="0,0,0,5"/>
+                        <Label Content="Camera Rotation" Foreground="White" FontWeight="Bold" Margin="0,10,0,0"/>
+                        <Label x:Name="PitchLabel" Content="Cam Pitch: 0°" Foreground="White"/>
+                        <Slider x:Name="PitchSlider"
+                                Minimum="-180" Maximum="180"
+                                Value="0"
+                                TickFrequency="45"
+                                Margin="0,0,0,5"/>
 
-                    <Label x:Name="YawLabel" Content="Cam Yaw: 0°" Foreground="White"/>
-                    <Slider x:Name="YawSlider"
-                            Minimum="-180" Maximum="180"
-                            Value="0"
-                            TickFrequency="45"
-                            Margin="0,0,0,5"/>
+                        <Label x:Name="RollLabel" Content="Cam Roll: 0°" Foreground="White"/>
+                        <Slider x:Name="RollSlider"
+                                Minimum="-180" Maximum="180"
+                                Value="0"
+                                TickFrequency="45"
+                                Margin="0,0,0,5"/>
+
+                        <Label x:Name="YawLabel" Content="Cam Yaw: 0°" Foreground="White"/>
+                        <Slider x:Name="YawSlider"
+                                Minimum="-180" Maximum="180"
+                                Value="0"
+                                TickFrequency="45"
+                                Margin="0,0,0,5"/>
+                    </StackPanel>
+
+                    <!-- Text controls -->
+                    <StackPanel x:Name="TextControlsPanel" Visibility="Collapsed">
+                        <Label Content="Text Position" Foreground="White" FontWeight="Bold"/>
+                        <Label x:Name="TextPosXLabel" Content="Text Pos X: 0.00" Foreground="White"/>
+                        <Slider x:Name="TextPosXSlider"
+                                Minimum="-100" Maximum="100"
+                                Value="0"
+                                TickFrequency="10"
+                                Margin="0,0,0,5"/>
+
+                        <Label x:Name="TextPosYLabel" Content="Text Pos Y: 0.00" Foreground="White"/>
+                        <Slider x:Name="TextPosYSlider"
+                                Minimum="-100" Maximum="100"
+                                Value="0"
+                                TickFrequency="10"
+                                Margin="0,0,0,5"/>
+
+                        <Label x:Name="TextPosZLabel" Content="Text Pos Z: 0.00" Foreground="White"/>
+                        <Slider x:Name="TextPosZSlider"
+                                Minimum="-100" Maximum="100"
+                                Value="0"
+                                TickFrequency="10"
+                                Margin="0,0,0,5"/>
+
+                        <Label Content="Text Rotation" Foreground="White" FontWeight="Bold" Margin="0,10,0,0"/>
+                        <Label x:Name="TextPitchLabel" Content="Text Pitch: 0°" Foreground="White"/>
+                        <Slider x:Name="TextPitchSlider"
+                                Minimum="-180" Maximum="180"
+                                Value="0"
+                                TickFrequency="45"
+                                Margin="0,0,0,5"/>
+
+                        <Label x:Name="TextRollLabel" Content="Text Roll: 0°" Foreground="White"/>
+                        <Slider x:Name="TextRollSlider"
+                                Minimum="-180" Maximum="180"
+                                Value="0"
+                                TickFrequency="45"
+                                Margin="0,0,0,5"/>
+
+                        <Label x:Name="TextYawLabel" Content="Text Yaw: 0°" Foreground="White"/>
+                        <Slider x:Name="TextYawSlider"
+                                Minimum="-180" Maximum="180"
+                                Value="0"
+                                TickFrequency="45"
+                                Margin="0,0,0,5"/>
+                    </StackPanel>
                 </StackPanel>
             </ScrollViewer>
         </Border>
