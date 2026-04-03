@@ -32,6 +32,7 @@ public partial class MainWindow : Window
     // Polyhedron selection
     private int _currentPolyhedronIndex = 1;
     private PolyhedronData? _currentPolyhedronData;
+    private int[]? _currentFaceVertices; // 3 vertices forming a valid face for the translucent grid
 
     // Box transform
     private Vector3D _boxOffset = new(0, 0, 0);
@@ -111,10 +112,13 @@ public partial class MainWindow : Window
             var facePoints = new Point3DCollection();
             int numLines = 20;
 
-            // Use first 3 vertices to establish face plane, then grid in that plane
-            var v0 = _currentPolyhedronData.Vertices[0];
-            var v1 = _currentPolyhedronData.Vertices[1];
-            var v2 = _currentPolyhedronData.Vertices[2];
+            // Use actual face vertices to establish face plane, then grid in that plane
+            int i0 = _currentFaceVertices != null ? _currentFaceVertices[0] : 0;
+            int i1 = _currentFaceVertices != null ? _currentFaceVertices[1] : 1;
+            int i2 = _currentFaceVertices != null ? _currentFaceVertices[2] : 2;
+            var v0 = _currentPolyhedronData.Vertices[i0];
+            var v1 = _currentPolyhedronData.Vertices[i1];
+            var v2 = _currentPolyhedronData.Vertices[i2];
 
             // Create grid lines in the face plane
             for (int i = 0; i <= numLines; i++)
@@ -349,6 +353,41 @@ public partial class MainWindow : Window
     {
         if (_particlesVisual == null || _particleLocalPositions == null) return;
 
+        // Find a valid face from the edge structure for the translucent face grid
+        _currentFaceVertices = null;
+        if (_currentPolyhedronData != null && _currentPolyhedronData.Edges.Length > 0)
+        {
+            var adjacency = new Dictionary<int, HashSet<int>>();
+            foreach (var edge in _currentPolyhedronData.Edges)
+            {
+                if (!adjacency.ContainsKey(edge[0])) adjacency[edge[0]] = new HashSet<int>();
+                if (!adjacency.ContainsKey(edge[1])) adjacency[edge[1]] = new HashSet<int>();
+                adjacency[edge[0]].Add(edge[1]);
+                adjacency[edge[1]].Add(edge[0]);
+            }
+
+            foreach (var kvp in adjacency)
+            {
+                if (kvp.Value.Count >= 2)
+                {
+                    int v0 = kvp.Key;
+                    foreach (int v1 in kvp.Value)
+                    {
+                        foreach (int v2 in kvp.Value)
+                        {
+                            if (v1 != v2 && adjacency[v1].Contains(v2))
+                            {
+                                _currentFaceVertices = [v0, v1, v2];
+                                break;
+                            }
+                        }
+                        if (_currentFaceVertices != null) break;
+                    }
+                }
+                if (_currentFaceVertices != null) break;
+            }
+        }
+
         // Update box wireframe using current polyhedron
         if (_boxWireframe != null && _currentPolyhedronData != null)
         {
@@ -372,9 +411,12 @@ public partial class MainWindow : Window
             var facePoints = new Point3DCollection();
             int numLines = 20;
 
-            var v0 = _currentPolyhedronData.Vertices[0];
-            var v1 = _currentPolyhedronData.Vertices[1];
-            var v2 = _currentPolyhedronData.Vertices[2];
+            int i0 = _currentFaceVertices != null ? _currentFaceVertices[0] : 0;
+            int i1 = _currentFaceVertices != null ? _currentFaceVertices[1] : 1;
+            int i2 = _currentFaceVertices != null ? _currentFaceVertices[2] : 2;
+            var v0 = _currentPolyhedronData.Vertices[i0];
+            var v1 = _currentPolyhedronData.Vertices[i1];
+            var v2 = _currentPolyhedronData.Vertices[i2];
 
             for (int i = 0; i <= numLines; i++)
             {
