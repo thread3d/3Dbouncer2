@@ -19,7 +19,7 @@ public partial class MainWindow : Window
     // Helix viewport visuals
     private PointsVisual3D? _particlesVisual;
     private LinesVisual3D? _boxWireframe;
-    private LinesVisual3D? _boxFace;
+    private ModelVisual3D? _boxFace; // Changed to ModelVisual3D for mesh geometry
 
     // Original particle local positions
     private Vector3D[]? _particleLocalPositions;
@@ -32,7 +32,7 @@ public partial class MainWindow : Window
     // Polyhedron selection
     private int _currentPolyhedronIndex = 1;
     private PolyhedronData? _currentPolyhedronData;
-    private int[]? _currentFaceVertices; // 3 vertices forming a valid face for the translucent grid
+    private int[]? _currentFaceVertices; // vertices forming a valid face for the translucent grid
 
     // Box transform
     private Vector3D _boxOffset = new(0, 0, 0);
@@ -78,11 +78,7 @@ public partial class MainWindow : Window
         };
         Viewport.Children.Add(_boxWireframe);
 
-        _boxFace = new LinesVisual3D
-        {
-            Color = Color.FromArgb(102, 255, 255, 255),
-            Thickness = 2
-        };
+        _boxFace = new ModelVisual3D();
         Viewport.Children.Add(_boxFace);
 
         InitializePolyhedronGeometry();
@@ -104,39 +100,6 @@ public partial class MainWindow : Window
                 wireframePoints.Add(new Point3D(v2.X, v2.Y, v2.Z));
             }
             _boxWireframe.Points = wireframePoints;
-        }
-
-        // Translucent face grid - create from first 3 vertices forming a face
-        if (_boxFace != null && _currentPolyhedronData != null && _currentPolyhedronData.Vertices.Length >= 3)
-        {
-            var facePoints = new Point3DCollection();
-            int numLines = 20;
-
-            // Use actual face vertices to establish face plane, then grid in that plane
-            int i0 = _currentFaceVertices != null ? _currentFaceVertices[0] : 0;
-            int i1 = _currentFaceVertices != null ? _currentFaceVertices[1] : 1;
-            int i2 = _currentFaceVertices != null ? _currentFaceVertices[2] : 2;
-            var v0 = _currentPolyhedronData.Vertices[i0];
-            var v1 = _currentPolyhedronData.Vertices[i1];
-            var v2 = _currentPolyhedronData.Vertices[i2];
-
-            // Create grid lines in the face plane
-            for (int i = 0; i <= numLines; i++)
-            {
-                double t = -1.0 + 2.0 * i / numLines;
-                // Line from v0 + t*(v1-v0) projected to face
-                double x = v0.X + t * (v1.X - v0.X);
-                double y = v0.Y + t * (v1.Y - v0.Y);
-                double z = v0.Z + t * (v1.Z - v0.Z);
-
-                double x2 = v0.X + t * (v2.X - v0.X);
-                double y2 = v0.Y + t * (v2.Y - v0.Y);
-                double z2 = v0.Z + t * (v2.Z - v0.Z);
-
-                facePoints.Add(new Point3D(x, y, z));
-                facePoints.Add(new Point3D(x2, y2, z2));
-            }
-            _boxFace.Points = facePoints;
         }
     }
 
@@ -366,25 +329,28 @@ public partial class MainWindow : Window
                 adjacency[edge[1]].Add(edge[0]);
             }
 
+            // Find all minimal cycles (faces) by walking edge loops
+            var visited = new HashSet<(int, int)>();
+            var foundFaces = new List<int[]>();
+
             foreach (var kvp in adjacency)
             {
-                if (kvp.Value.Count >= 2)
+                int start = kvp.Key;
+                foreach (int next in kvp.Value)
                 {
-                    int v0 = kvp.Key;
-                    foreach (int v1 in kvp.Value)
+                    // Try to find a cycle starting with edge (start, next)
+                    var cycle = TryFindCycle(start, next, adjacency, visited);
+                    if (cycle != null && cycle.Length >= 3)
                     {
-                        foreach (int v2 in kvp.Value)
-                        {
-                            if (v1 != v2 && adjacency[v1].Contains(v2))
-                            {
-                                _currentFaceVertices = [v0, v1, v2];
-                                break;
-                            }
-                        }
-                        if (_currentFaceVertices != null) break;
+                        foundFaces.Add(cycle);
                     }
                 }
-                if (_currentFaceVertices != null) break;
+            }
+
+            // Pick the first valid face found
+            if (foundFaces.Count > 0)
+            {
+                _currentFaceVertices = foundFaces[0];
             }
         }
 
@@ -405,36 +371,66 @@ public partial class MainWindow : Window
             _boxWireframe.Points = wireframePoints;
         }
 
-        // Update translucent face grid
+        // Update translucent face mesh
         if (_boxFace != null && _currentPolyhedronData != null && _currentPolyhedronData.Vertices.Length >= 3)
         {
-            var facePoints = new Point3DCollection();
-            int numLines = 20;
-
-            int i0 = _currentFaceVertices != null ? _currentFaceVertices[0] : 0;
-            int i1 = _currentFaceVertices != null ? _currentFaceVertices[1] : 1;
-            int i2 = _currentFaceVertices != null ? _currentFaceVertices[2] : 2;
-            var v0 = _currentPolyhedronData.Vertices[i0];
-            var v1 = _currentPolyhedronData.Vertices[i1];
-            var v2 = _currentPolyhedronData.Vertices[i2];
-
-            for (int i = 0; i <= numLines; i++)
+            if (_currentFaceVertices != null && _currentFaceVertices.Length >= 3)
             {
-                double t = -1.0 + 2.0 * i / numLines;
-                double x = v0.X + t * (v1.X - v0.X);
-                double y = v0.Y + t * (v1.Y - v0.Y);
-                double z = v0.Z + t * (v1.Z - v0.Z);
+                // Reorder vertices by angle around centroid so they form a proper polygon
+                var centroid = new Point3D(0, 0, 0);
+                foreach (int idx in _currentFaceVertices)
+                {
+                    var v = _currentPolyhedronData.Vertices[idx];
+                    centroid.X += v.X;
+                    centroid.Y += v.Y;
+                    centroid.Z += v.Z;
+                }
+                centroid.X /= _currentFaceVertices.Length;
+                centroid.Y /= _currentFaceVertices.Length;
+                centroid.Z /= _currentFaceVertices.Length;
 
-                double x2 = v0.X + t * (v2.X - v0.X);
-                double y2 = v0.Y + t * (v2.Y - v0.Y);
-                double z2 = v0.Z + t * (v2.Z - v0.Z);
+                // Sort by angle in XY plane (looking down Z axis)
+                var sorted = _currentFaceVertices
+                    .Select(idx => new {
+                        idx,
+                        angle = Math.Atan2(
+                            _currentPolyhedronData.Vertices[idx].Y - centroid.Y,
+                            _currentPolyhedronData.Vertices[idx].X - centroid.X)
+                    })
+                    .OrderBy(x => x.angle)
+                    .Select(x => x.idx)
+                    .ToArray();
 
-                facePoints.Add(ApplyBoxTransform(new Point3D(x, y, z)));
-                facePoints.Add(ApplyBoxTransform(new Point3D(x2, y2, z2)));
+                int n = sorted.Length;
+
+                // Create mesh with triangle fan from centroid
+                var mesh = new MeshGeometry3D();
+                int triCount = n; // number of triangles
+
+                for (int i = 0; i < triCount; i++)
+                {
+                    int i1 = sorted[i];
+                    int i2 = sorted[(i + 1) % n];
+                    var v0 = ApplyBoxTransform(centroid);
+                    var v1 = ApplyBoxTransform(_currentPolyhedronData.Vertices[i1]);
+                    var v2 = ApplyBoxTransform(_currentPolyhedronData.Vertices[i2]);
+
+                    int baseIndex = mesh.Positions.Count;
+                    mesh.Positions.Add(v0);
+                    mesh.Positions.Add(v1);
+                    mesh.Positions.Add(v2);
+                    mesh.TriangleIndices.Add(baseIndex);
+                    mesh.TriangleIndices.Add(baseIndex + 1);
+                    mesh.TriangleIndices.Add(baseIndex + 2);
+                }
+
+                byte alpha = (byte)(_boxOpacity * 255);
+                var material = new DiffuseMaterial(new SolidColorBrush(Color.FromArgb(alpha, 255, 255, 255)));
+                var geometryModel = new GeometryModel3D(mesh, material);
+                geometryModel.BackMaterial = material; // Double-sided
+
+                _boxFace.Content = geometryModel;
             }
-            _boxFace.Points = facePoints;
-            byte alpha = (byte)(_boxOpacity * 255);
-            _boxFace.Color = Color.FromArgb(alpha, 255, 255, 255);
         }
 
         // Update particles
@@ -447,6 +443,49 @@ public partial class MainWindow : Window
 
         _particlesVisual.Points = points;
         _particlesVisual.Color = _currentTextColor;
+    }
+
+    // Find a minimal cycle (face) starting from edge (start, next) in the adjacency graph
+    private static int[]? TryFindCycle(int start, int next, Dictionary<int, HashSet<int>> adjacency, HashSet<(int, int)> visited)
+    {
+        // Don't visit same directed edge twice
+        if (!visited.Add((start, next))) return null;
+
+        var path = new List<int> { start, next };
+        int current = next;
+
+        for (int step = 0; step < 20; step++) // max 20 vertices in a face
+        {
+            var neighbors = adjacency[current];
+            int? nextVertex = null;
+
+            foreach (int candidate in neighbors)
+            {
+                if (candidate == start && path.Count >= 3)
+                {
+                    // Found a cycle back to start with at least 3 vertices
+                    return path.ToArray();
+                }
+                if (candidate != path[^1]) // don't go back on same edge
+                {
+                    nextVertex = candidate;
+                }
+            }
+
+            if (nextVertex == null) return null;
+
+            int nv = nextVertex.Value;
+            // Avoid immediately returning to the vertex before previous (prevent 2-cycle)
+            if (path.Count >= 2 && nv == path[^2])
+            {
+                return null;
+            }
+
+            path.Add(nv);
+            current = nv;
+        }
+
+        return null;
     }
 
     private void RegenerateParticles()
