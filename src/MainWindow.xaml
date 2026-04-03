@@ -15,13 +15,11 @@
                              Text="HELLO"
                              FontSize="14"
                              Padding="5"
-                             Margin="0,5,0,10"
-                             TextChanged="OnTextInputChanged"/>
+                             Margin="0,5,0,10"/>
 
                     <!-- Color picker -->
                     <Button x:Name="ColorButton"
                             Content="Choose Color"
-                            Click="OnColorButtonClick"
                             Height="28"
                             Margin="0,0,0,5"/>
                     <Label x:Name="ColorLabel"
@@ -38,8 +36,7 @@
                             Value="10000"
                             TickFrequency="10000"
                             IsSnapToTickEnabled="True"
-                            Margin="0,0,0,15"
-                            ValueChanged="OnParticleCountChanged"/>
+                            Margin="0,0,0,15"/>
 
                     <!-- Particle size slider -->
                     <Label x:Name="ParticleSizeLabel"
@@ -50,8 +47,7 @@
                             Value="4"
                             TickFrequency="1"
                             IsSnapToTickEnabled="True"
-                            Margin="0,0,0,15"
-                            ValueChanged="OnParticleSizeChanged"/>
+                            Margin="0,0,0,15"/>
 
                     <!-- Box opacity slider -->
                     <Label x:Name="BoxOpacityLabel"
@@ -62,8 +58,7 @@
                             Value="40"
                             TickFrequency="10"
                             IsSnapToTickEnabled="True"
-                            Margin="0,0,0,15"
-                            ValueChanged="OnBoxOpacityChanged"/>
+                            Margin="0,0,0,15"/>
 
                     <!-- Mode selection -->
                     <GroupBox Header="Mode" Foreground="White" Margin="0,0,0,10">
@@ -72,17 +67,14 @@
                                         Content="Automatic"
                                         Foreground="White"
                                         IsChecked="True"
-                                        Checked="OnModeChanged"
                                         Margin="0,5,0,0"/>
                             <RadioButton x:Name="ManualRadio"
                                          Content="Manual"
                                          Foreground="White"
-                                         Checked="OnModeChanged"
                                          Margin="0,5,0,0"/>
                             <RadioButton x:Name="MixRadio"
                                          Content="Mix"
                                          Foreground="White"
-                                         Checked="OnModeChanged"
                                          Margin="0,5,0,0"/>
                         </StackPanel>
                     </GroupBox>
@@ -93,24 +85,21 @@
                             Minimum="-500" Maximum="500"
                             Value="175"
                             TickFrequency="100"
-                            Margin="0,0,0,5"
-                            ValueChanged="OnPositionChanged"/>
+                            Margin="0,0,0,5"/>
 
                     <Label x:Name="PosYLabel" Content="Cam Pos Y: 1.25" Foreground="White"/>
                     <Slider x:Name="PosYSlider"
                             Minimum="-500" Maximum="500"
                             Value="125"
                             TickFrequency="100"
-                            Margin="0,0,0,5"
-                            ValueChanged="OnPositionChanged"/>
+                            Margin="0,0,0,5"/>
 
                     <Label x:Name="PosZLabel" Content="Cam Pos Z: 2.50" Foreground="White"/>
                     <Slider x:Name="PosZSlider"
                             Minimum="-1000" Maximum="1000"
                             Value="250"
                             TickFrequency="200"
-                            Margin="0,0,0,5"
-                            ValueChanged="OnPositionChanged"/>
+                            Margin="0,0,0,5"/>
 
                     <!-- Rotation controls -->
                     <Label x:Name="PitchLabel" Content="Cam Pitch: 0°" Foreground="White"/>
@@ -118,24 +107,21 @@
                             Minimum="-180" Maximum="180"
                             Value="0"
                             TickFrequency="45"
-                            Margin="0,0,0,5"
-                            ValueChanged="OnRotationChanged"/>
+                            Margin="0,0,0,5"/>
 
                     <Label x:Name="RollLabel" Content="Cam Roll: 0°" Foreground="White"/>
                     <Slider x:Name="RollSlider"
                             Minimum="-180" Maximum="180"
                             Value="0"
                             TickFrequency="45"
-                            Margin="0,0,0,5"
-                            ValueChanged="OnRotationChanged"/>
+                            Margin="0,0,0,5"/>
 
                     <Label x:Name="YawLabel" Content="Cam Yaw: 0°" Foreground="White"/>
                     <Slider x:Name="YawSlider"
                             Minimum="-180" Maximum="180"
                             Value="0"
                             TickFrequency="45"
-                            Margin="0,0,0,5"
-                            ValueChanged="OnRotationChanged"/>
+                            Margin="0,0,0,5"/>
                 </StackPanel>
             </ScrollViewer>
         </Border>

@@ -36,9 +36,28 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         SetupParticlesVisual();
-        SetupRenderLoop();
         InitializeBoxWireframe();
+        WireEvents();
+        SetupRenderLoop();
         RegenerateParticles();
+    }
+
+    private void WireEvents()
+    {
+        TextInputBox.TextChanged += OnTextInputChanged;
+        ColorButton.Click += OnColorButtonClick;
+        ParticleCountSlider.ValueChanged += OnParticleCountChanged;
+        ParticleSizeSlider.ValueChanged += OnParticleSizeChanged;
+        BoxOpacitySlider.ValueChanged += OnBoxOpacityChanged;
+        AutoRadio.Checked += OnModeChanged;
+        ManualRadio.Checked += OnModeChanged;
+        MixRadio.Checked += OnModeChanged;
+        PosXSlider.ValueChanged += OnPositionChanged;
+        PosYSlider.ValueChanged += OnPositionChanged;
+        PosZSlider.ValueChanged += OnPositionChanged;
+        PitchSlider.ValueChanged += OnRotationChanged;
+        RollSlider.ValueChanged += OnRotationChanged;
+        YawSlider.ValueChanged += OnRotationChanged;
     }
 
     private void SetupParticlesVisual()
@@ -225,7 +244,7 @@ public partial class MainWindow : Window
 
     private void OnBoxOpacityChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
     {
-        if (BoxOpacityLabel == null) return;
+        if (BoxOpacityLabel == null || BoxWireframe == null) return;
         float opacity = (float)(BoxOpacitySlider.Value / 100.0);
         BoxOpacityLabel.Content = $"Box Opacity: {BoxOpacitySlider.Value}%";
         BoxWireframe.Color = Color.FromArgb(
@@ -235,6 +254,7 @@ public partial class MainWindow : Window
 
     private void OnModeChanged(object sender, RoutedEventArgs e)
     {
+        if (ManualRadio == null || MixRadio == null) return;
         ControlMode mode = ControlMode.Automatic;
         if (ManualRadio.IsChecked == true)
             mode = ControlMode.Manual;
