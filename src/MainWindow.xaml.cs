@@ -5,7 +5,6 @@ using System.Windows.Media.Media3D;
 using System.Windows.Threading;
 using HelixToolkit.Wpf;
 using SkiaSharp;
-using OpenTKMath = OpenTK.Mathematics;
 using Color = System.Windows.Media.Color;
 
 namespace TextBouncer;
@@ -19,82 +18,75 @@ public partial class MainWindow : Window
 
     // Helix viewport visuals
     private PointsVisual3D? _particlesVisual;
+    private LinesVisual3D? _boxWireframe;
+    private LinesVisual3D? _boxFace;
 
-    // Original box wireframe points (12 edges = 24 points)
-    private Point3D[] _originalBoxPoints = null!;
-    private Point3DCollection _currentBoxPoints = null!;
+    // Original particle local positions
+    private Vector3D[]? _particleLocalPositions;
 
     // Current state
     private Color _currentTextColor = Colors.White;
     private int _currentParticleCount = 10000;
     private ParticleData[]? _particleData;
 
-    // Scene transform - applies to entire scene (box + text)
-    private Vector3D _sceneOffset = new(0, 0, 0);
-    private Vector3D _sceneVelocity = new(0.02, 0.015, 0.01);
-    private const double SceneBoundary = 0.8;
-    private const double SceneBounceDamping = 0.995;
+    // Box transform
+    private Vector3D _boxOffset = new(0, 0, 0);
+    private Vector3D _boxVelocity = new(0.015, 0.01, 0.008);
+    private double _boxPitch = 0, _boxYaw = 0, _boxRoll = 0;
+    private double _angularPitch = 0.3, _angularYaw = 0.2, _angularRoll = 0.15;
+    private const double BoxBoundary = 0.7;
+    private const double BounceDamping = 0.98;
 
-    // Scene rotation state (pitch, yaw, roll in degrees)
-    private double _scenePitch = 0;
-    private double _sceneYaw = 0;
-    private double _sceneRoll = 0;
-    private double _angularPitch = 0.5;
-    private double _angularYaw = 0.3;
-    private double _angularRoll = 0.2;
+    // Text relative to box
+    private Vector3D _textOffset = new(0, 0, 0);
+    private Vector3D _textVelocity = new(0.008, 0.006, 0.004);
+    private double _textPitch = 0, _textYaw = 0, _textRoll = 0;
+    private double _textAngularPitch = 0.2, _textAngularYaw = 0.15, _textAngularRoll = 0.1;
+    private const double TextBoundary = 0.5;
+
+    // Box face opacity
+    private float _boxOpacity = 0.4f;
 
     // Render loop
     private DispatcherTimer _renderTimer = null!;
+    private long _lastFrameTime;
     private System.Diagnostics.Stopwatch _stopwatch = null!;
 
     public MainWindow()
     {
         InitializeComponent();
-        SetupParticlesVisual();
-        InitializeBoxWireframe();
+        SetupVisuals();
         WireEvents();
         SetupRenderLoop();
         RegenerateParticles();
     }
 
-    private void WireEvents()
-    {
-        TextInputBox.TextChanged += OnTextInputChanged;
-        ColorButton.Click += OnColorButtonClick;
-        ParticleCountSlider.ValueChanged += OnParticleCountChanged;
-        ParticleSizeSlider.ValueChanged += OnParticleSizeChanged;
-        BoxOpacitySlider.ValueChanged += OnBoxOpacityChanged;
-        AutoRadio.Checked += OnModeChanged;
-        ManualRadio.Checked += OnModeChanged;
-        MixRadio.Checked += OnModeChanged;
-        CameraControlRadio.Checked += OnControlTargetChanged;
-        TextControlRadio.Checked += OnControlTargetChanged;
-        // Camera controls
-        PosXSlider.ValueChanged += OnPositionChanged;
-        PosYSlider.ValueChanged += OnPositionChanged;
-        PosZSlider.ValueChanged += OnPositionChanged;
-        PitchSlider.ValueChanged += OnRotationChanged;
-        RollSlider.ValueChanged += OnRotationChanged;
-        YawSlider.ValueChanged += OnRotationChanged;
-        // Text controls
-        TextPosXSlider.ValueChanged += OnTextPositionChanged;
-        TextPosYSlider.ValueChanged += OnTextPositionChanged;
-        TextPosZSlider.ValueChanged += OnTextPositionChanged;
-        TextPitchSlider.ValueChanged += OnTextRotationChanged;
-        TextRollSlider.ValueChanged += OnTextRotationChanged;
-        TextYawSlider.ValueChanged += OnTextRotationChanged;
-    }
-
-    private void SetupParticlesVisual()
+    private void SetupVisuals()
     {
         _particlesVisual = new PointsVisual3D();
         Viewport.Children.Add(_particlesVisual);
+
+        _boxWireframe = new LinesVisual3D
+        {
+            Color = Colors.White,
+            Thickness = 1
+        };
+        Viewport.Children.Add(_boxWireframe);
+
+        _boxFace = new LinesVisual3D
+        {
+            Color = Color.FromArgb(102, 255, 255, 255),
+            Thickness = 2
+        };
+        Viewport.Children.Add(_boxFace);
+
+        InitializeBoxGeometries();
     }
 
-    private void InitializeBoxWireframe()
+    private void InitializeBoxGeometries()
     {
-        // Store original box points for scene transform
-        _originalBoxPoints = new Point3D[]
+        // Wireframe: 12 edges
+        var wireframePoints = new Point3DCollection
         {
             // Front face
             new Point3D(-1, -1,  1), new Point3D( 1, -1,  1),
@@ -112,54 +104,52 @@ public partial class MainWindow : Window
             new Point3D( 1,  1,  1), new Point3D( 1,  1, -1),
             new Point3D(-1,  1,  1), new Point3D(-1,  1, -1),
         };
-        _currentBoxPoints = new Point3DCollection(_originalBoxPoints);
-        BoxWireframe.Points = _currentBoxPoints;
-    }
+        _boxWireframe.Points = wireframePoints;
 
-    private Point3D ApplySceneRotation(Point3D p)
-    {
-        double pitchRad = _scenePitch * Math.PI / 180.0;
-        double yawRad = _sceneYaw * Math.PI / 180.0;
-        double rollRad = _sceneRoll * Math.PI / 180.0;
-
-        double cosPitch = Math.Cos(pitchRad), sinPitch = Math.Sin(pitchRad);
-        double cosYaw = Math.Cos(yawRad), sinYaw = Math.Sin(yawRad);
-        double cosRoll = Math.Cos(rollRad), sinRoll = Math.Sin(rollRad);
-
-        // Yaw (Y-axis rotation)
-        double x1 = cosYaw * p.X - sinYaw * p.Z;
-        double y1 = p.Y;
-        double z1 = sinYaw * p.X + cosYaw * p.Z;
-
-        // Pitch (X-axis rotation)
-        double x2 = x1;
-        double y2 = cosPitch * y1 - sinPitch * z1;
-        double z2 = sinPitch * y1 + cosPitch * z1;
-
-        // Roll (Z-axis rotation)
-        double x3 = cosRoll * x2 - sinRoll * y2;
-        double y3 = sinRoll * x2 + cosRoll * y2;
-        double z3 = z2;
-
-        return new Point3D(x3, y3, z3);
-    }
-
-    private void UpdateSceneVisuals()
-    {
-        // Update box wireframe with scene transform
-        for (int i = 0; i < _originalBoxPoints.Length; i++)
+        // Translucent front face (filled with lines)
+        var facePoints = new Point3DCollection();
+        int numLines = 20;
+        for (int i = 0; i <= numLines; i++)
         {
-            var rotated = ApplySceneRotation(_originalBoxPoints[i]);
-            _currentBoxPoints[i] = new Point3D(
-                rotated.X + _sceneOffset.X,
-                rotated.Y + _sceneOffset.Y,
-                rotated.Z + _sceneOffset.Z);
+            double t = -1.0 + 2.0 * i / numLines;
+            // Horizontal lines
+            facePoints.Add(new Point3D(-1, t, 1));
+            facePoints.Add(new Point3D(1, t, 1));
+            // Vertical lines
+            facePoints.Add(new Point3D(t, -1, 1));
+            facePoints.Add(new Point3D(t, 1, 1));
         }
+        _boxFace.Points = facePoints;
+    }
+
+    private void WireEvents()
+    {
+        TextInputBox.TextChanged += OnTextInputChanged;
+        ColorButton.Click += OnColorButtonClick;
+        ParticleCountSlider.ValueChanged += OnParticleCountChanged;
+        BoxOpacitySlider.ValueChanged += OnBoxOpacityChanged;
+        CameraControlRadio.Checked += OnControlTargetChanged;
+        TextControlRadio.Checked += OnControlTargetChanged;
+        // Camera controls
+        PosXSlider.ValueChanged += OnPositionChanged;
+        PosYSlider.ValueChanged += OnPositionChanged;
+        PosZSlider.ValueChanged += OnPositionChanged;
+        PitchSlider.ValueChanged += OnRotationChanged;
+        RollSlider.ValueChanged += OnRotationChanged;
+        YawSlider.ValueChanged += OnRotationChanged;
+        // Scene controls
+        TextPosXSlider.ValueChanged += OnScenePositionChanged;
+        TextPosYSlider.ValueChanged += OnScenePositionChanged;
+        TextPosZSlider.ValueChanged += OnScenePositionChanged;
+        TextPitchSlider.ValueChanged += OnSceneRotationChanged;
+        TextRollSlider.ValueChanged += OnSceneRotationChanged;
+        TextYawSlider.ValueChanged += OnSceneRotationChanged;
     }
 
     private void SetupRenderLoop()
     {
         _stopwatch = System.Diagnostics.Stopwatch.StartNew();
+        _lastFrameTime = _stopwatch.ElapsedTicks;
 
         _renderTimer = new DispatcherTimer
         {
@@ -171,53 +161,238 @@ public partial class MainWindow : Window
 
     private void OnRenderTick(object? sender, EventArgs e)
     {
-        UpdateSceneBounce();
-        UpdateSceneVisuals();
-        UpdateParticleVisuals();
+        long currentTime = _stopwatch.ElapsedTicks;
+        float deltaTime = (float)(currentTime - _lastFrameTime) / System.Diagnostics.Stopwatch.Frequency;
+        _lastFrameTime = currentTime;
+        deltaTime = Math.Min(deltaTime, 0.05f);
+
+        UpdateBouncing(deltaTime);
+        UpdateVisuals();
     }
 
-    private void UpdateSceneBounce()
+    private void UpdateBouncing(float dt)
     {
-        // Update scene position based on velocity
-        _sceneOffset.X += _sceneVelocity.X;
-        _sceneOffset.Y += _sceneVelocity.Y;
-        _sceneOffset.Z += _sceneVelocity.Z;
+        // Update box position
+        _boxOffset.X += _boxVelocity.X * dt * 60;
+        _boxOffset.Y += _boxVelocity.Y * dt * 60;
+        _boxOffset.Z += _boxVelocity.Z * dt * 60;
 
-        // Bounce off scene boundaries with damping
-        if (_sceneOffset.X > SceneBoundary || _sceneOffset.X < -SceneBoundary)
+        // Box bounces off scene boundary
+        if (_boxOffset.X > BoxBoundary || _boxOffset.X < -BoxBoundary)
         {
-            _sceneVelocity.X *= -SceneBounceDamping;
-            _angularPitch *= -1;
-            _angularRoll *= -1;
-            _sceneOffset.X = Math.Clamp(_sceneOffset.X, -SceneBoundary, SceneBoundary);
+            _boxVelocity.X *= -BounceDamping;
+            _angularPitch = RandomAngular();
+            _angularRoll = RandomAngular();
+            _boxOffset.X = Math.Clamp(_boxOffset.X, -BoxBoundary, BoxBoundary);
         }
-        if (_sceneOffset.Y > SceneBoundary || _sceneOffset.Y < -SceneBoundary)
+        if (_boxOffset.Y > BoxBoundary || _boxOffset.Y < -BoxBoundary)
         {
-            _sceneVelocity.Y *= -SceneBounceDamping;
-            _angularYaw *= -1;
-            _angularRoll *= -1;
-            _sceneOffset.Y = Math.Clamp(_sceneOffset.Y, -SceneBoundary, SceneBoundary);
+            _boxVelocity.Y *= -BounceDamping;
+            _angularYaw = RandomAngular();
+            _angularRoll = RandomAngular();
+            _boxOffset.Y = Math.Clamp(_boxOffset.Y, -BoxBoundary, BoxBoundary);
         }
-        if (_sceneOffset.Z > SceneBoundary || _sceneOffset.Z < -SceneBoundary)
+        if (_boxOffset.Z > BoxBoundary || _boxOffset.Z < -BoxBoundary)
         {
-            _sceneVelocity.Z *= -SceneBounceDamping;
-            _angularPitch *= -1;
-            _angularYaw *= -1;
-            _sceneOffset.Z = Math.Clamp(_sceneOffset.Z, -SceneBoundary, SceneBoundary);
+            _boxVelocity.Z *= -BounceDamping;
+            _angularPitch = RandomAngular();
+            _angularYaw = RandomAngular();
+            _boxOffset.Z = Math.Clamp(_boxOffset.Z, -BoxBoundary, BoxBoundary);
         }
 
-        // Update rotation angles
-        _scenePitch += _angularPitch;
-        _sceneYaw += _angularYaw;
-        _sceneRoll += _angularRoll;
+        // Update box rotation
+        _boxPitch += _angularPitch;
+        _boxYaw += _angularYaw;
+        _boxRoll += _angularRoll;
 
-        // Keep angles in reasonable range
-        if (_scenePitch > 360) _scenePitch -= 360;
-        if (_scenePitch < 0) _scenePitch += 360;
-        if (_sceneYaw > 360) _sceneYaw -= 360;
-        if (_sceneYaw < 0) _sceneYaw += 360;
-        if (_sceneRoll > 360) _sceneRoll -= 360;
-        if (_sceneRoll < 0) _sceneRoll += 360;
+        // Update text position relative to box
+        _textOffset.X += _textVelocity.X * dt * 60;
+        _textOffset.Y += _textVelocity.Y * dt * 60;
+        _textOffset.Z += _textVelocity.Z * dt * 60;
+
+        // Text bounces inside box
+        if (_textOffset.X > TextBoundary || _textOffset.X < -TextBoundary)
+        {
+            _textVelocity.X *= -BounceDamping;
+            _textAngularPitch = RandomAngular();
+            _textAngularRoll = RandomAngular();
+            _textOffset.X = Math.Clamp(_textOffset.X, -TextBoundary, TextBoundary);
+        }
+        if (_textOffset.Y > TextBoundary || _textOffset.Y < -TextBoundary)
+        {
+            _textVelocity.Y *= -BounceDamping;
+            _textAngularYaw = RandomAngular();
+            _textAngularRoll = RandomAngular();
+            _textOffset.Y = Math.Clamp(_textOffset.Y, -TextBoundary, TextBoundary);
+        }
+        if (_textOffset.Z > TextBoundary || _textOffset.Z < -TextBoundary)
+        {
+            _textVelocity.Z *= -BounceDamping;
+            _textAngularPitch = RandomAngular();
+            _textAngularYaw = RandomAngular();
+            _textOffset.Z = Math.Clamp(_textOffset.Z, -TextBoundary, TextBoundary);
+        }
+
+        // Update text rotation
+        _textPitch += _textAngularPitch;
+        _textYaw += _textAngularYaw;
+        _textRoll += _textAngularRoll;
+    }
+
+    private static double RandomAngular()
+    {
+        return (Random.Shared.NextDouble() - 0.5) * 0.8;
+    }
+
+    private Point3D ApplyBoxTransform(Point3D p)
+    {
+        double pitchRad = _boxPitch * Math.PI / 180.0;
+        double yawRad = _boxYaw * Math.PI / 180.0;
+        double rollRad = _boxRoll * Math.PI / 180.0;
+
+        double cosPitch = Math.Cos(pitchRad), sinPitch = Math.Sin(pitchRad);
+        double cosYaw = Math.Cos(yawRad), sinYaw = Math.Sin(yawRad);
+        double cosRoll = Math.Cos(rollRad), sinRoll = Math.Sin(rollRad);
+
+        // Yaw (Y-axis)
+        double x1 = cosYaw * p.X - sinYaw * p.Z;
+        double y1 = p.Y;
+        double z1 = sinYaw * p.X + cosYaw * p.Z;
+
+        // Pitch (X-axis)
+        double x2 = x1;
+        double y2 = cosPitch * y1 - sinPitch * z1;
+        double z2 = sinPitch * y1 + cosPitch * z1;
+
+        // Roll (Z-axis)
+        double x3 = cosRoll * x2 - sinRoll * y2;
+        double y3 = sinRoll * x2 + cosRoll * y2;
+        double z3 = z2;
+
+        return new Point3D(x3 + _boxOffset.X, y3 + _boxOffset.Y, z3 + _boxOffset.Z);
+    }
+
+    private Point3D ApplyTextTransform(Vector3D local)
+    {
+        // Apply box transform first
+        double pitchRad = _boxPitch * Math.PI / 180.0;
+        double yawRad = _boxYaw * Math.PI / 180.0;
+        double rollRad = _boxRoll * Math.PI / 180.0;
+
+        double cosPitch = Math.Cos(pitchRad), sinPitch = Math.Sin(pitchRad);
+        double cosYaw = Math.Cos(yawRad), sinYaw = Math.Sin(yawRad);
+        double cosRoll = Math.Cos(rollRad), sinRoll = Math.Sin(rollRad);
+
+        // Box rotation
+        double x1 = cosYaw * local.X - sinYaw * local.Z;
+        double y1 = local.Y;
+        double z1 = sinYaw * local.X + cosYaw * local.Z;
+
+        double x2 = x1;
+        double y2 = cosPitch * y1 - sinPitch * z1;
+        double z2 = sinPitch * y1 + cosPitch * z1;
+
+        double x3 = cosRoll * x2 - sinRoll * y2;
+        double y3 = sinRoll * x2 + cosRoll * y2;
+        double z3 = z2;
+
+        // Add text offset
+        x3 += _textOffset.X;
+        y3 += _textOffset.Y;
+        z3 += _textOffset.Z;
+
+        // Apply text rotation (relative to its own center)
+        pitchRad = _textPitch * Math.PI / 180.0;
+        yawRad = _textYaw * Math.PI / 180.0;
+        rollRad = _textRoll * Math.PI / 180.0;
+
+        cosPitch = Math.Cos(pitchRad); sinPitch = Math.Sin(pitchRad);
+        cosYaw = Math.Cos(yawRad); sinYaw = Math.Sin(yawRad);
+        cosRoll = Math.Cos(rollRad); sinRoll = Math.Sin(rollRad);
+
+        // Text rotation around Y
+        double x4 = cosYaw * x3 - sinYaw * z3;
+        double y4 = y3;
+        double z4 = sinYaw * x3 + cosYaw * z3;
+
+        // Text rotation around X
+        double x5 = x4;
+        double y5 = cosPitch * y4 - sinPitch * z4;
+        double z5 = sinPitch * y4 + cosPitch * z4;
+
+        // Text rotation around Z
+        double x6 = cosRoll * x5 - sinRoll * y5;
+        double y6 = sinRoll * x5 + cosRoll * y5;
+        double z6 = z5;
+
+        // Add box offset (already added above)
+
+        return new Point3D(x6, y6, z6);
+    }
+
+    private void UpdateVisuals()
+    {
+        if (_particlesVisual == null || _particleLocalPositions == null) return;
+
+        // Update box wireframe
+        if (_boxWireframe != null)
+        {
+            var wireframePoints = new Point3DCollection();
+            var originalWireframe = new[]
+            {
+                // Front face
+                (new Point3D(-1,-1,1), new Point3D(1,-1,1)),
+                (new Point3D(1,-1,1), new Point3D(1,1,1)),
+                (new Point3D(1,1,1), new Point3D(-1,1,1)),
+                (new Point3D(-1,1,1), new Point3D(-1,-1,1)),
+                // Back face
+                (new Point3D(-1,-1,-1), new Point3D(1,-1,-1)),
+                (new Point3D(1,-1,-1), new Point3D(1,1,-1)),
+                (new Point3D(1,1,-1), new Point3D(-1,1,-1)),
+                (new Point3D(-1,1,-1), new Point3D(-1,-1,-1)),
+                // Connecting
+                (new Point3D(-1,-1,1), new Point3D(-1,-1,-1)),
+                (new Point3D(1,-1,1), new Point3D(1,-1,-1)),
+                (new Point3D(1,1,1), new Point3D(1,1,-1)),
+                (new Point3D(-1,1,1), new Point3D(-1,1,-1)),
+            };
+
+            foreach (var (p1, p2) in originalWireframe)
+            {
+                wireframePoints.Add(ApplyBoxTransform(p1));
+                wireframePoints.Add(ApplyBoxTransform(p2));
+            }
+            _boxWireframe.Points = wireframePoints;
+        }
+
+        // Update box face
+        if (_boxFace != null)
+        {
+            var facePoints = new Point3DCollection();
+            int numLines = 20;
+            for (int i = 0; i <= numLines; i++)
+            {
+                double t = -1.0 + 2.0 * i / numLines;
+                facePoints.Add(ApplyBoxTransform(new Point3D(-1, t, 1)));
+                facePoints.Add(ApplyBoxTransform(new Point3D(1, t, 1)));
+                facePoints.Add(ApplyBoxTransform(new Point3D(t, -1, 1)));
+                facePoints.Add(ApplyBoxTransform(new Point3D(t, 1, 1)));
+            }
+            _boxFace.Points = facePoints;
+            byte alpha = (byte)(_boxOpacity * 255);
+            _boxFace.Color = Color.FromArgb(alpha, 255, 255, 255);
+        }
+
+        // Update particles
+        var points = new Point3DCollection();
+        for (int i = 0; i < _particleLocalPositions.Length; i++)
+        {
+            var local = _particleLocalPositions[i];
+            points.Add(ApplyTextTransform(local));
+        }
+
+        _particlesVisual.Points = points;
+        _particlesVisual.Color = _currentTextColor;
     }
 
     private void RegenerateParticles()
@@ -225,7 +400,7 @@ public partial class MainWindow : Window
         if (string.IsNullOrEmpty(TextInputBox.Text) || _textRasterizer == null)
         {
             _particleData = null;
-            UpdateParticleVisuals();
+            _particleLocalPositions = null;
             return;
         }
 
@@ -238,18 +413,16 @@ public partial class MainWindow : Window
         _currentTextBitmap?.Dispose();
         _currentTextBitmap = _textRasterizer.RenderText(
             TextInputBox.Text,
-            width: 512,
-            height: 256,
             textColor: skColor);
 
         if (_currentTextBitmap == null)
         {
             _particleData = null;
-            UpdateParticleVisuals();
+            _particleLocalPositions = null;
             return;
         }
 
-        var particleColor = new OpenTKMath.Vector4(
+        var particleColor = new OpenTK.Mathematics.Vector4(
             _currentTextColor.R / 255f,
             _currentTextColor.G / 255f,
             _currentTextColor.B / 255f,
@@ -262,92 +435,44 @@ public partial class MainWindow : Window
 
         _particleData = particles;
 
-        // Reset scene to defaults
-        _sceneOffset = new Vector3D(0, 0, 0);
-        _sceneVelocity = new Vector3D(0.02, 0.015, 0.01);
-        _scenePitch = 0;
-        _sceneYaw = 0;
-        _sceneRoll = 0;
-        _angularPitch = 0.5;
-        _angularYaw = 0.3;
-        _angularRoll = 0.2;
-
-        UpdateSceneVisuals();
-        UpdateParticleVisuals();
-    }
-
-    private void UpdateParticleVisuals()
-    {
-        if (_particlesVisual == null || _particleData == null)
-            return;
-
-        // Precompute rotation matrix for scene transform
-        double pitchRad = _scenePitch * Math.PI / 180.0;
-        double yawRad = _sceneYaw * Math.PI / 180.0;
-        double rollRad = _sceneRoll * Math.PI / 180.0;
-
-        double cosPitch = Math.Cos(pitchRad), sinPitch = Math.Sin(pitchRad);
-        double cosYaw = Math.Cos(yawRad), sinYaw = Math.Sin(yawRad);
-        double cosRoll = Math.Cos(rollRad), sinRoll = Math.Sin(rollRad);
-
-        var points = new Point3DCollection();
-
-        for (int i = 0; i < _particleData.Length; i++)
+        _particleLocalPositions = new Vector3D[particles.Length];
+        for (int i = 0; i < particles.Length; i++)
         {
-            var p = _particleData[i];
-            // Apply scene rotation (same as box)
-            // Yaw (Y-axis rotation)
-            double x1 = cosYaw * p.Position.X - sinYaw * p.Position.Z;
-            double y1 = p.Position.Y;
-            double z1 = sinYaw * p.Position.X + cosYaw * p.Position.Z;
-
-            // Pitch (X-axis rotation)
-            double x2 = x1;
-            double y2 = cosPitch * y1 - sinPitch * z1;
-            double z2 = sinPitch * y1 + cosPitch * z1;
-
-            // Roll (Z-axis rotation)
-            double x3 = cosRoll * x2 - sinRoll * y2;
-            double y3 = sinRoll * x2 + cosRoll * y2;
-            double z3 = z2;
-
-            // Apply scene offset
-            points.Add(new Point3D(
-                x3 + _sceneOffset.X,
-                y3 + _sceneOffset.Y,
-                z3 + _sceneOffset.Z));
+            _particleLocalPositions[i] = new Vector3D(
+                particles[i].Position.X,
+                particles[i].Position.Y,
+                particles[i].Position.Z);
         }
 
-        _particlesVisual.Points = points;
-        _particlesVisual.Color = _currentTextColor;
-    }
+        // Reset to defaults
+        _boxOffset = new Vector3D(0, 0, 0);
+        _boxVelocity = new Vector3D(0.015, 0.01, 0.008);
+        _boxPitch = _boxYaw = _boxRoll = 0;
+        _angularPitch = 0.3; _angularYaw = 0.2; _angularRoll = 0.15;
 
-    private void SetParticleColor()
-    {
-        UpdateParticleVisuals();
+        _textOffset = new Vector3D(0, 0, 0);
+        _textVelocity = new Vector3D(0.008, 0.006, 0.004);
+        _textPitch = _textYaw = _textRoll = 0;
+        _textAngularPitch = 0.2; _textAngularYaw = 0.15; _textAngularRoll = 0.1;
+
+        UpdateVisuals();
     }
 
     // --- UI Event Handlers ---
 
     private void OnColorButtonClick(object sender, RoutedEventArgs e)
     {
-        var dialog = new System.Windows.Forms.ColorDialog
-        {
-            FullOpen = true
-        };
+        var dialog = new System.Windows.Forms.ColorDialog { FullOpen = true };
 
         if (dialog.ShowDialog() == System.Windows.Forms.DialogResult.OK)
         {
             _currentTextColor = Color.FromArgb(
-                dialog.Color.A,
-                dialog.Color.R,
-                dialog.Color.G,
-                dialog.Color.B);
+                dialog.Color.A, dialog.Color.R, dialog.Color.G, dialog.Color.B);
             ColorLabel.Content = $"Color: {dialog.Color.Name}";
             ColorButton.Background = new SolidColorBrush(_currentTextColor);
             double brightness = (dialog.Color.R * 0.299 + dialog.Color.G * 0.587 + dialog.Color.B * 0.114) / 255;
             ColorButton.Foreground = new SolidColorBrush(brightness > 0.5 ? Colors.Black : Colors.White);
-            SetParticleColor();
+            UpdateVisuals();
         }
     }
 
@@ -364,25 +489,11 @@ public partial class MainWindow : Window
         RegenerateParticles();
     }
 
-    private void OnParticleSizeChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
-    {
-        if (ParticleSizeLabel == null) return;
-        ParticleSizeLabel.Content = $"Size: {ParticleSizeSlider.Value:F0}px";
-    }
-
     private void OnBoxOpacityChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
     {
-        if (BoxOpacityLabel == null || BoxWireframe == null) return;
-        float opacity = (float)(BoxOpacitySlider.Value / 100.0);
-        BoxOpacityLabel.Content = $"Box Opacity: {BoxOpacitySlider.Value}%";
-        BoxWireframe.Color = Color.FromArgb(
-            (byte)(opacity * 255),
-            255, 255, 255);
-    }
-
-    private void OnModeChanged(object sender, RoutedEventArgs e)
-    {
-        // Mode changes don't affect text bouncing in this implementation
+        if (BoxOpacityLabel == null) return;
+        _boxOpacity = (float)(BoxOpacitySlider.Value / 100.0);
+        BoxOpacityLabel.Content = $"Box Face Opacity: {BoxOpacitySlider.Value}%";
     }
 
     private void OnControlTargetChanged(object sender, RoutedEventArgs e)
@@ -400,38 +511,6 @@ public partial class MainWindow : Window
             CameraControlsPanel.Visibility = Visibility.Collapsed;
             TextControlsPanel.Visibility = Visibility.Visible;
         }
-    }
-
-    private void OnTextPositionChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
-    {
-        if (TextPosXLabel == null) return;
-        double x = TextPosXSlider.Value / 100.0;
-        double y = TextPosYSlider.Value / 100.0;
-        double z = TextPosZSlider.Value / 100.0;
-
-        TextPosXLabel.Content = $"Text Pos X: {x:F2}";
-        TextPosYLabel.Content = $"Text Pos Y: {y:F2}";
-        TextPosZLabel.Content = $"Text Pos Z: {z:F2}";
-
-        _sceneOffset = new Vector3D(x, y, z);
-        UpdateSceneVisuals();
-    }
-
-    private void OnTextRotationChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
-    {
-        if (TextPitchLabel == null) return;
-        double pitch = TextPitchSlider.Value;
-        double roll = TextRollSlider.Value;
-        double yaw = TextYawSlider.Value;
-
-        TextPitchLabel.Content = $"Text Pitch: {pitch:F0}°";
-        TextRollLabel.Content = $"Text Roll: {roll:F0}°";
-        TextYawLabel.Content = $"Text Yaw: {yaw:F0}°";
-
-        _scenePitch = pitch;
-        _sceneRoll = roll;
-        _sceneYaw = yaw;
-        UpdateSceneVisuals();
     }
 
     private void OnPositionChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
@@ -471,33 +550,59 @@ public partial class MainWindow : Window
             var lookDir = new Vector3D(0, 0, -1);
             var upDir = new Vector3D(0, 1, 0);
 
-            var rotated = RotateVector(lookDir, upDir, yawRad);
-            rotated = RotateVector(rotated, new Vector3D(1, 0, 0), pitchRad);
+            // Yaw
+            double x1 = Math.Cos(yawRad) * lookDir.X - Math.Sin(yawRad) * lookDir.Z;
+            double y1 = lookDir.Y;
+            double z1 = Math.Sin(yawRad) * lookDir.X + Math.Cos(yawRad) * lookDir.Z;
 
-            cam.LookDirection = rotated;
-            cam.UpDirection = RotateVector(upDir, new Vector3D(1, 0, 0), rollRad);
+            // Pitch
+            double x2 = x1;
+            double y2 = Math.Cos(pitchRad) * y1 - Math.Sin(pitchRad) * z1;
+            double z2 = Math.Sin(pitchRad) * y1 + Math.Cos(pitchRad) * z1;
+
+            // Roll
+            double x3 = Math.Cos(rollRad) * x2 - Math.Sin(rollRad) * y2;
+            double y3 = Math.Sin(rollRad) * x2 + Math.Cos(rollRad) * y2;
+            double z3 = z2;
+
+            cam.LookDirection = new Vector3D(x3, y3, z3);
+            cam.UpDirection = new Vector3D(
+                Math.Cos(rollRad) - Math.Sin(rollRad),
+                Math.Sin(rollRad) + Math.Cos(rollRad),
+                0);
         }
     }
 
-    private static Vector3D RotateVector(Vector3D v, Vector3D axis, double angle)
+    private void OnScenePositionChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
     {
-        double cos = Math.Cos(angle);
-        double sin = Math.Sin(angle);
-        double t = 1.0 - cos;
+        if (TextPosXLabel == null) return;
+        double x = TextPosXSlider.Value / 100.0;
+        double y = TextPosYSlider.Value / 100.0;
+        double z = TextPosZSlider.Value / 100.0;
 
-        double x = axis.X, y = axis.Y, z = axis.Z;
+        TextPosXLabel.Content = $"Box Pos X: {x:F2}";
+        TextPosYLabel.Content = $"Box Pos Y: {y:F2}";
+        TextPosZLabel.Content = $"Box Pos Z: {z:F2}";
 
-        double resultX = (t * x * x + cos) * v.X
-            + (t * x * y - sin * z) * v.Y
-            + (t * x * z + sin * y) * v.Z;
-        double resultY = (t * x * y + sin * z) * v.X
-            + (t * y * y + cos) * v.Y
-            + (t * y * z - sin * x) * v.Z;
-        double resultZ = (t * x * z - sin * y) * v.X
-            + (t * y * z + sin * x) * v.Y
-            + (t * z * z + cos) * v.Z;
+        _boxOffset = new Vector3D(x, y, z);
+        _boxVelocity = new Vector3D(0, 0, 0);
+    }
 
-        return new Vector3D(resultX, resultY, resultZ);
+    private void OnSceneRotationChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        if (TextPitchLabel == null) return;
+        double pitch = TextPitchSlider.Value;
+        double roll = TextRollSlider.Value;
+        double yaw = TextYawSlider.Value;
+
+        TextPitchLabel.Content = $"Box Pitch: {pitch:F0}°";
+        TextRollLabel.Content = $"Box Roll: {roll:F0}°";
+        TextYawLabel.Content = $"Box Yaw: {yaw:F0}°";
+
+        _boxPitch = pitch;
+        _boxRoll = roll;
+        _boxYaw = yaw;
+        _angularPitch = _angularYaw = _angularRoll = 0;
     }
 
     protected override void OnClosed(EventArgs e)

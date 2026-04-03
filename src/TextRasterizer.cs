@@ -1,5 +1,6 @@
 using SkiaSharp;
 using System;
+using System.Numerics;
 
 namespace TextBouncer;
 
@@ -11,6 +12,48 @@ public class TextRasterizer : IDisposable
 {
     private const float DefaultFontSize = 72f;
     private const string DefaultFontFamily = "Arial";
+
+    /// <summary>
+    /// Measures the dimensions required to render text with the default font.
+    /// </summary>
+    /// <param name="text">Text to measure</param>
+    /// <returns>Vector2 where X=width, Y=height in pixels</returns>
+    public Vector2 MeasureText(string text)
+    {
+        if (string.IsNullOrEmpty(text))
+            return Vector2.Zero;
+
+        using var paint = new SKPaint();
+        paint.TextSize = DefaultFontSize;
+        paint.Typeface = SKTypeface.FromFamilyName(DefaultFontFamily);
+        paint.IsAntialias = true;
+
+        float width = paint.MeasureText(text);
+        // Use a reasonable height based on font size
+        float height = DefaultFontSize * 1.5f;
+
+        return new Vector2(width, height);
+    }
+
+    /// <summary>
+    /// Renders text to a SkiaSharp bitmap with auto-sized dimensions.
+    /// </summary>
+    /// <param name="text">Text to render</param>
+    /// <param name="textColor">Color to render text (alpha=255 for opaque)</param>
+    /// <param name="padding">Extra padding around text in pixels</param>
+    /// <returns>SKBitmap with Bgra8888 format, or null if text is empty</returns>
+    public SKBitmap? RenderText(string text, SKColor textColor, float padding = 20f)
+    {
+        if (string.IsNullOrEmpty(text))
+            return null;
+
+        // Measure text to determine required size
+        var measured = MeasureText(text);
+        int width = (int)Math.Ceiling(measured.X + padding * 2);
+        int height = (int)Math.Ceiling(measured.Y + padding * 2);
+
+        return RenderText(text, width, height, textColor);
+    }
 
     /// <summary>
     /// Renders text to a SkiaSharp bitmap.
