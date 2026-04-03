@@ -1,4 +1,3 @@
-using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -24,13 +23,16 @@ public partial class MainWindow : Window
     // Current state
     private Color _currentTextColor = Colors.White;
     private int _currentParticleCount = 10000;
-    private float _currentParticleSize = 4.0f;
     private ParticleData[]? _particleData;
 
-    // Physics
-    private PhysicsSimulator _physics = new();
+    // Text bouncing state - the entire text shape bounces as a unit
+    private Vector3D _textOffset = new(0, 0, 0);
+    private Vector3D _textVelocity = new(0.02, 0.015, 0.01);
+    private const double BoxHalf = 0.8; // Text stays within 80% of box to keep particles visible
+    private const double TextBounceDamping = 0.995;
+
+    // Render loop
     private DispatcherTimer _renderTimer = null!;
-    private long _lastFrameTime;
     private System.Diagnostics.Stopwatch _stopwatch = null!;
 
     public MainWindow()
@@ -69,7 +71,6 @@ public partial class MainWindow : Window
 
     private void InitializeBoxWireframe()
     {
-        // 12 edges of cube from GLHost.InitializeBoxGeometry()
         var points = new Point3DCollection
         {
             // Front face
@@ -94,7 +95,6 @@ public partial class MainWindow : Window
     private void SetupRenderLoop()
     {
         _stopwatch = System.Diagnostics.Stopwatch.StartNew();
-        _lastFrameTime = _stopwatch.ElapsedTicks;
 
         _renderTimer = new DispatcherTimer
         {
@@ -106,15 +106,32 @@ public partial class MainWindow : Window
 
     private void OnRenderTick(object? sender, EventArgs e)
     {
-        long currentTime = _stopwatch.ElapsedTicks;
-        float deltaTime = (float)(currentTime - _lastFrameTime) / System.Diagnostics.Stopwatch.Frequency;
-        _lastFrameTime = currentTime;
-        deltaTime = Math.Min(deltaTime, 0.1f);
+        UpdateTextBounce();
+        UpdateParticleVisuals();
+    }
 
-        if (_particleData != null && _particleData.Length > 0)
+    private void UpdateTextBounce()
+    {
+        // Update text position based on velocity
+        _textOffset.X += _textVelocity.X;
+        _textOffset.Y += _textVelocity.Y;
+        _textOffset.Z += _textVelocity.Z;
+
+        // Bounce off box boundaries with damping
+        if (_textOffset.X > BoxHalf || _textOffset.X < -BoxHalf)
         {
-            _physics.Update(deltaTime, _particleData);
-            UpdateParticleVisuals();
+            _textVelocity.X *= -TextBounceDamping;
+            _textOffset.X = Math.Clamp(_textOffset.X, -BoxHalf, BoxHalf);
+        }
+        if (_textOffset.Y > BoxHalf || _textOffset.Y < -BoxHalf)
+        {
+            _textVelocity.Y *= -TextBounceDamping;
+            _textOffset.Y = Math.Clamp(_textOffset.Y, -BoxHalf, BoxHalf);
+        }
+        if (_textOffset.Z > BoxHalf || _textOffset.Z < -BoxHalf)
+        {
+            _textVelocity.Z *= -TextBounceDamping;
+            _textOffset.Z = Math.Clamp(_textOffset.Z, -BoxHalf, BoxHalf);
         }
     }
 
@@ -122,7 +139,7 @@ public partial class MainWindow : Window
     {
         if (string.IsNullOrEmpty(TextInputBox.Text) || _textRasterizer == null)
         {
-            _particleData = Array.Empty<ParticleData>();
+            _particleData = null;
             UpdateParticleVisuals();
             return;
         }
@@ -142,7 +159,7 @@ public partial class MainWindow : Window
 
         if (_currentTextBitmap == null)
         {
-            _particleData = Array.Empty<ParticleData>();
+            _particleData = null;
             UpdateParticleVisuals();
             return;
         }
@@ -159,7 +176,14 @@ public partial class MainWindow : Window
             particleColor);
 
         _particleData = particles;
-        _physics.SetTextBitmap(_currentTextBitmap);
+
+        // Reset text position and give it a fresh random velocity
+        _textOffset = new Vector3D(0, 0, 0);
+        _textVelocity = new Vector3D(
+            (Random.Shared.NextDouble() - 0.5) * 0.04,
+            (Random.Shared.NextDouble() - 0.5) * 0.03,
+            (Random.Shared.NextDouble() - 0.5) * 0.02);
+
         UpdateParticleVisuals();
     }
 
@@ -169,34 +193,23 @@ public partial class MainWindow : Window
             return;
 
         var points = new Point3DCollection();
-        Color firstColor = _currentTextColor;
 
         for (int i = 0; i < _particleData.Length; i++)
         {
             var p = _particleData[i];
-            points.Add(new Point3D(p.Position.X, p.Position.Y, p.Position.Z));
+            // Add text offset to particle position
+            points.Add(new Point3D(
+                p.Position.X + _textOffset.X,
+                p.Position.Y + _textOffset.Y,
+                p.Position.Z + _textOffset.Z));
         }
 
         _particlesVisual.Points = points;
-        _particlesVisual.Color = firstColor;
+        _particlesVisual.Color = _currentTextColor;
     }
 
     private void SetParticleColor()
     {
-        if (_particleData == null) return;
-        var newColor = new OpenTKMath.Vector4(
-            _currentTextColor.R / 255f,
-            _currentTextColor.G / 255f,
-            _currentTextColor.B / 255f,
-            1.0f);
-
-        for (int i = 0; i < _particleData.Length; i++)
-        {
-            _particleData[i] = new ParticleData(
-                _particleData[i].Position,
-                _particleData[i].Velocity,
-                newColor);
-        }
         UpdateParticleVisuals();
     }
 
@@ -240,8 +253,7 @@ public partial class MainWindow : Window
     private void OnParticleSizeChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
     {
         if (ParticleSizeLabel == null) return;
-        _currentParticleSize = (float)ParticleSizeSlider.Value;
-        ParticleSizeLabel.Content = $"Size: {_currentParticleSize}px";
+        ParticleSizeLabel.Content = $"Size: {ParticleSizeSlider.Value:F0}px";
     }
 
     private void OnBoxOpacityChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
@@ -256,14 +268,7 @@ public partial class MainWindow : Window
 
     private void OnModeChanged(object sender, RoutedEventArgs e)
     {
-        if (ManualRadio == null || MixRadio == null) return;
-        ControlMode mode = ControlMode.Automatic;
-        if (ManualRadio.IsChecked == true)
-            mode = ControlMode.Manual;
-        else if (MixRadio.IsChecked == true)
-            mode = ControlMode.Mixture;
-
-        _physics.Mode = mode;
+        // Mode changes don't affect text bouncing in this implementation
     }
 
     private void OnPositionChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
