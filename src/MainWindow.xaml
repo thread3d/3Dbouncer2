@@ -12,7 +12,7 @@
                 <StackPanel>
                     <!-- Text Input -->
                     <TextBox x:Name="TextInputBox"
-                             Text="HELLO"
+                             Text="Hello: this is in 3D"
                              FontSize="14"
                              Padding="5"
                              Margin="0,5,0,10"/>
