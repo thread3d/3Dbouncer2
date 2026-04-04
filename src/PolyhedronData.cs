@@ -62,7 +62,7 @@ public static class PolyhedronLibrary
             }
         }
 
-        return DeduplicateFaces(faces);
+        return FilterExternalFaces(vertices, DeduplicateFaces(faces));
     }
 
     private static int[] WalkFace(Point3D[] vertices, List<int>[] adjacency, int start, int v1, int v2, HashSet<(int, int)> visitedEdges)
@@ -119,7 +119,7 @@ public static class PolyhedronLibrary
 
         var pn = vertices[newIdx];
         double dist = Math.Abs((pn.X - p0.X) * nx + (pn.Y - p0.Y) * ny + (pn.Z - p0.Z) * nz);
-        return dist < 0.005;
+        return dist < 0.02; // fixed tolerance for normalized vertices
     }
 
     private static int[][] DeduplicateFaces(List<int[]> faces)
@@ -133,6 +133,79 @@ public static class PolyhedronLibrary
             if (!unique.Contains(key)) { unique.Add(key); result.Add(norm); }
         }
         return result.ToArray();
+    }
+
+    // Filter faces to only include external faces (all other vertices on same side of plane)
+    private static int[][] FilterExternalFaces(Point3D[] vertices, int[][] faces)
+    {
+        var external = new List<int[]>();
+
+        foreach (var face in faces)
+        {
+            if (IsExternalFace(vertices, face))
+                external.Add(face);
+        }
+
+        return external.ToArray();
+    }
+
+    private static bool IsExternalFace(Point3D[] vertices, int[] face)
+    {
+        if (face.Length < 3) return false;
+
+        // Compute face normal
+        var p0 = vertices[face[0]];
+        var p1 = vertices[face[1]];
+        var p2 = vertices[face[2]];
+        double ax = p1.X - p0.X, ay = p1.Y - p0.Y, az = p1.Z - p0.Z;
+        double bx = p2.X - p0.X, by = p2.Y - p0.Y, bz = p2.Z - p0.Z;
+        double nx = ay * bz - az * by;
+        double ny = az * bx - ax * bz;
+        double nz = ax * by - ay * bx;
+        double nlen = Math.Sqrt(nx * nx + ny * ny + nz * nz);
+        if (nlen < 1e-10) return false;
+        nx /= nlen; ny /= nlen; nz /= nlen;
+
+        // Compute centroid of all vertices
+        double cx = 0, cy = 0, cz = 0;
+        foreach (var v in vertices) { cx += v.X; cy += v.Y; cz += v.Z; }
+        int n = vertices.Length;
+        cx /= n; cy /= n; cz /= n;
+
+        // Signed distance from centroid to face plane
+        double centroidDist = (cx - p0.X) * nx + (cy - p0.Y) * ny + (cz - p0.Z) * nz;
+        if (Math.Abs(centroidDist) < 0.001) return false; // centroid on plane = degenerate
+
+        // Compute face bounding size for adaptive tolerance
+        double faceSize = 0;
+        foreach (int fi in face)
+        {
+            var v = vertices[fi];
+            double dx = Math.Abs(v.X - p0.X);
+            double dy = Math.Abs(v.Y - p0.Y);
+            double dz = Math.Abs(v.Z - p0.Z);
+            double d = Math.Max(dx, Math.Max(dy, dz));
+            if (d > faceSize) faceSize = d;
+        }
+
+        // Use adaptive tolerance: scale by face size (handles both large and small faces)
+        double tol = faceSize * 0.30;
+        if (tol < 0.05) tol = 0.05;
+
+        var faceSet = new HashSet<int>(face);
+
+        int sameSignCount = 0, oppositeSignCount = 0;
+        foreach (int i in Enumerable.Range(0, vertices.Length))
+        {
+            if (faceSet.Contains(i)) continue;
+            var vi = vertices[i];
+            double dist = (vi.X - p0.X) * nx + (vi.Y - p0.Y) * ny + (vi.Z - p0.Z) * nz;
+            if (Math.Abs(dist) < tol) continue; // vertex on plane = ok
+            if (dist * centroidDist > 0) sameSignCount++;
+            else oppositeSignCount++;
+        }
+
+        return oppositeSignCount == 0; // valid if no vertices on opposite side
     }
 
     private static int[] NormalizeFace(int[] face)
