@@ -119,7 +119,7 @@ public static class PolyhedronLibrary
 
         var pn = vertices[newIdx];
         double dist = Math.Abs((pn.X - p0.X) * nx + (pn.Y - p0.Y) * ny + (pn.Z - p0.Z) * nz);
-        return dist < 0.01;
+        return dist < 0.005;
     }
 
     private static int[][] DeduplicateFaces(List<int[]> faces)

@@ -350,7 +350,19 @@ public partial class MainWindow : Window
                 // Determine which faces to render
                 int[][] facesToRender;
                 if (_transparencyMode == 0)
-                    facesToRender = new int[][] { faces[0] };  // Single face only
+                {
+                    // Pick the face whose centroid is furthest from origin (most visible/external face)
+                    var bestFace = faces.OrderByDescending(f => {
+                        double cx = 0, cy = 0, cz = 0;
+                        foreach (int idx in f) {
+                            var v = _currentPolyhedronData.Vertices[idx];
+                            cx += v.X; cy += v.Y; cz += v.Z;
+                        }
+                        cx /= f.Length; cy /= f.Length; cz /= f.Length;
+                        return Math.Sqrt(cx*cx + cy*cy + cz*cz);
+                    }).First();
+                    facesToRender = new int[][] { bestFace };
+                }
                 else if (_transparencyMode == 1)
                     facesToRender = faces;                     // All faces
                 else
@@ -363,7 +375,7 @@ public partial class MainWindow : Window
                 {
                     if (faceIndices.Length < 3) continue;
 
-                    // Reorder vertices by angle around centroid so they form a proper polygon
+                    // Reorder vertices by angle around centroid, using the face's normal axis
                     var centroid = new Point3D(0, 0, 0);
                     foreach (int idx in faceIndices)
                     {
@@ -376,13 +388,32 @@ public partial class MainWindow : Window
                     centroid.Y /= faceIndices.Length;
                     centroid.Z /= faceIndices.Length;
 
-                    // Sort by angle in XY plane (looking down Z axis)
+                    // Compute face normal to determine sorting plane
+                    var p0 = _currentPolyhedronData.Vertices[faceIndices[0]];
+                    var p1 = _currentPolyhedronData.Vertices[faceIndices[1]];
+                    var p2 = _currentPolyhedronData.Vertices[faceIndices[2]];
+                    double ax = p1.X - p0.X, ay = p1.Y - p0.Y, az = p1.Z - p0.Z;
+                    double bx = p2.X - p0.X, by = p2.Y - p0.Y, bz = p2.Z - p0.Z;
+                    double nx = ay * bz - az * by;
+                    double ny = az * bx - ax * bz;
+                    double nz = ax * by - ay * bx;
+                    double nlen = Math.Sqrt(nx * nx + ny * ny + nz * nz);
+                    if (nlen < 1e-10) continue;
+                    nx /= nlen; ny /= nlen; nz /= nlen;
+
+                    // Sort by angle around the dominant axis of the normal
                     var sorted = faceIndices
-                        .Select(idx => new {
-                            idx,
-                            angle = Math.Atan2(
-                                _currentPolyhedronData.Vertices[idx].Y - centroid.Y,
-                                _currentPolyhedronData.Vertices[idx].X - centroid.X)
+                        .Select(idx => {
+                            var v = _currentPolyhedronData.Vertices[idx];
+                            double angle;
+                            // Project to 2D plane perpendicular to face normal
+                            if (Math.Abs(nz) >= Math.Abs(nx) && Math.Abs(nz) >= Math.Abs(ny))
+                                angle = Math.Atan2(v.Y - centroid.Y, v.X - centroid.X);
+                            else if (Math.Abs(ny) >= Math.Abs(nx) && Math.Abs(ny) >= Math.Abs(nz))
+                                angle = Math.Atan2(v.Z - centroid.Z, v.X - centroid.X);
+                            else
+                                angle = Math.Atan2(v.Z - centroid.Z, v.Y - centroid.Y);
+                            return new { idx, angle };
                         })
                         .OrderBy(x => x.angle)
                         .Select(x => x.idx)
