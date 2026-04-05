@@ -5,6 +5,7 @@ using System.Windows.Media.Media3D;
 using System.Windows.Threading;
 using HelixToolkit.Wpf;
 using SkiaSharp;
+using TextBouncer.FillRules;
 using Color = System.Windows.Media.Color;
 
 namespace TextBouncer;
@@ -48,11 +49,17 @@ public partial class MainWindow : Window
     private double _textAngularPitch = 0.2, _textAngularYaw = 0.15, _textAngularRoll = 0.1;
     private const double TextBoundary = 0.5;
 
+    // Additive slider tracking for scene position
+    private double _sceneSliderBaseX = 0, _sceneSliderBaseY = 0, _sceneSliderBaseZ = 0;
+
+    // Additive slider tracking for scene rotation
+    private double _sceneRotationBasePitch = 0, _sceneRotationBaseYaw = 0, _sceneRotationBaseRoll = 0;
+
     // Box face opacity
     private float _boxOpacity = 0.4f;
 
     // Transparency mode: 0 = face only, 1 = whole polyhedron, 2 = wireframe only
-    private int _transparencyMode = 2;
+    private int _transparencyMode = 1;
 
     // Render loop
     private DispatcherTimer _renderTimer = null!;
@@ -345,30 +352,69 @@ public partial class MainWindow : Window
             if (faces != null && faces.Length > 0)
             {
                 byte alpha = (byte)(_boxOpacity * 255);
-                var material = new DiffuseMaterial(new SolidColorBrush(Color.FromArgb(alpha, 255, 255, 255)));
+
+                Action<string> log = msg => {
+                    System.Diagnostics.Debug.WriteLine(msg);
+                    System.IO.File.AppendAllText("debug_triangulation.log", msg + "\n");
+                };
+                log("=== UpdateVisuals: transparencyMode=" + _transparencyMode + ", faces=" + faces.Length + " ===");
+
+                IFillRuleStrategy fillRule = GetCurrentFillRule();
+                log("FillRule: polyhedron=" + _currentPolyhedronIndex + " using '" + fillRule.Name + "'");
+
+                // Try the 3D rendering path first (RenderFaces)
+                var camera = Viewport.Camera as PerspectiveCamera;
+                var cameraPos = camera?.Position ?? new Point3D(0, 0, 0);
+                var cameraLook = camera?.LookDirection ?? new Vector3D(0, 0, -1);
+
+                // Compute polyhedron centroid for 3D strategies
+                var polyCentroid = new Point3D(0, 0, 0);
+                foreach (var v in _currentPolyhedronData.Vertices)
+                    polyCentroid = new Point3D(polyCentroid.X + v.X, polyCentroid.Y + v.Y, polyCentroid.Z + v.Z);
+                polyCentroid = new Point3D(polyCentroid.X / _currentPolyhedronData.Vertices.Length,
+                                          polyCentroid.Y / _currentPolyhedronData.Vertices.Length,
+                                          polyCentroid.Z / _currentPolyhedronData.Vertices.Length);
+
+                var rendered = fillRule.RenderFaces(
+                    faces,
+                    _currentPolyhedronData.Vertices,
+                    _currentPolyhedronData.Edges,
+                    polyCentroid,
+                    cameraPos,
+                    cameraLook,
+                    _boxOpacity,
+                    ApplyBoxTransform,
+                    log);
+
+                if (rendered != null)
+                {
+                    // 3D rendering strategy produced a result directly
+                    log("3D strategy produced " + rendered.Children.Count + " child models");
+                    _boxFace.Content = rendered;
+                    return;
+                }
+
+                // Fall back to 2D triangulation path
+                log("Using 2D triangulation path");
 
                 // Determine which faces to render
                 int[][] facesToRender;
                 if (_transparencyMode == 0)
                 {
-                    // Pick the face whose centroid is furthest from origin (most visible/external face)
                     var bestFace = faces.OrderByDescending(f => {
                         double cx = 0, cy = 0, cz = 0;
-                        foreach (int idx in f) {
-                            var v = _currentPolyhedronData.Vertices[idx];
-                            cx += v.X; cy += v.Y; cz += v.Z;
-                        }
+                        foreach (int idx in f) { var v = _currentPolyhedronData.Vertices[idx]; cx += v.X; cy += v.Y; cz += v.Z; }
                         cx /= f.Length; cy /= f.Length; cz /= f.Length;
-                        return Math.Sqrt(cx*cx + cy*cy + cz*cz);
+                        return Math.Sqrt(cx * cx + cy * cy + cz * cz);
                     }).First();
                     facesToRender = new int[][] { bestFace };
                 }
                 else if (_transparencyMode == 1)
-                    facesToRender = faces;                     // All faces
+                    facesToRender = faces;
                 else
-                    facesToRender = Array.Empty<int[]>();     // Wireframe only - no faces
+                    facesToRender = Array.Empty<int[]>();
 
-                // Create a Model3DGroup to hold all face models
+                var material = new DiffuseMaterial(new SolidColorBrush(Color.FromArgb(alpha, 255, 255, 255)));
                 var modelGroup = new Model3DGroup();
 
                 foreach (var faceIndices in facesToRender)
@@ -402,7 +448,8 @@ public partial class MainWindow : Window
                     nx /= nlen; ny /= nlen; nz /= nlen;
 
                     // Sort by angle around the dominant axis of the normal
-                    var sorted = faceIndices
+                    // First compute angles, then sort, then handle wrap-around rotation
+                    var indexed = faceIndices
                         .Select(idx => {
                             var v = _currentPolyhedronData.Vertices[idx];
                             double angle;
@@ -413,29 +460,169 @@ public partial class MainWindow : Window
                                 angle = Math.Atan2(v.Z - centroid.Z, v.X - centroid.X);
                             else
                                 angle = Math.Atan2(v.Z - centroid.Z, v.Y - centroid.Y);
-                            return new { idx, angle };
+                            return (idx, angle);
                         })
                         .OrderBy(x => x.angle)
-                        .Select(x => x.idx)
                         .ToArray();
 
-                    int n = sorted.Length;
+                    // Fix angle wrap-around: find the largest gap and rotate so it spans -PI to +PI continuously
+                    int n = indexed.Length;
+                    if (n > 1)
+                    {
+                        // Find largest gap (between consecutive sorted angles)
+                        double maxGap = 0;
+                        int maxGapAfter = 0; // rotate so elements AFTER this gap come first
+                        for (int i = 0; i < n - 1; i++)
+                        {
+                            double gap = indexed[i + 1].angle - indexed[i].angle;
+                            if (gap > maxGap) { maxGap = gap; maxGapAfter = i + 1; }
+                        }
+                        // Check wrap-around gap (from last to first + 2PI)
+                        double wrapGap = (indexed[0].angle + 2 * Math.PI) - indexed[n - 1].angle;
+                        if (wrapGap > maxGap) { maxGap = wrapGap; maxGapAfter = 0; }
 
-                    // Create mesh with triangle fan from centroid
-                    var mesh = new MeshGeometry3D();
+                        // For convex polygons, adjacent vertices on circle should have small gaps.
+                        // If largest gap is > PI, the polygon wraps around and needs rotation.
+                        if (maxGap > Math.PI && maxGapAfter > 0)
+                        {
+                            // Rotate: elements from maxGapAfter to end come first, then 0 to maxGapAfter-1
+                            var rotated = new (int idx, double angle)[n];
+                            int firstPortionLen = n - maxGapAfter;
+                            for (int i = 0; i < firstPortionLen; i++)
+                                rotated[i] = indexed[maxGapAfter + i];
+                            for (int i = 0; i < maxGapAfter; i++)
+                                rotated[firstPortionLen + i] = indexed[i];
+                            indexed = rotated;
+                        }
+                    }
 
+                    var sorted = indexed.Select(x => x.idx).ToArray();
+
+                    log("=== Face (" + n + "-gon): [" + string.Join(",", sorted) + "] ===");
+
+                    // Build sorted 3D points array for triangulation
+                    var sorted3D = new Point3D[n];
+                    for (int i = 0; i < n; i++)
+                        sorted3D[i] = _currentPolyhedronData.Vertices[sorted[i]];
+
+                    // Debug: Verify sorting is correct (angles should increase)
                     for (int i = 0; i < n; i++)
                     {
-                        int i1 = sorted[i];
-                        int i2 = sorted[(i + 1) % n];
-                        var v0 = ApplyBoxTransform(centroid);
-                        var v1 = ApplyBoxTransform(_currentPolyhedronData.Vertices[i1]);
-                        var v2 = ApplyBoxTransform(_currentPolyhedronData.Vertices[i2]);
+                        var v = sorted3D[i];
+                        double angle;
+                        if (Math.Abs(nz) >= Math.Abs(nx) && Math.Abs(nz) >= Math.Abs(ny))
+                            angle = Math.Atan2(v.Y - centroid.Y, v.X - centroid.X);
+                        else if (Math.Abs(ny) >= Math.Abs(nx) && Math.Abs(ny) >= Math.Abs(nz))
+                            angle = Math.Atan2(v.Z - centroid.Z, v.X - centroid.X);
+                        else
+                            angle = Math.Atan2(v.Z - centroid.Z, v.Y - centroid.Y);
+                        log($"  sorted[{i}] = {sorted[i]}: angle={angle:F4}, pos=({v.X:F3},{v.Y:F3},{v.Z:F3})");
+                    }
+
+                    // Reorder vertices to follow actual perimeter path using edge connectivity
+                    // Build adjacency lookup for the original edges
+                    var faceSet = new HashSet<int>(sorted);
+                    var perimeterOrder = new int[n];
+                    perimeterOrder[0] = sorted[0];
+                    var used = new bool[n];
+                    used[0] = true;
+
+                    for (int i = 1; i < n; i++)
+                    {
+                        int nextVertex = -1;
+                        int currentVertex = perimeterOrder[i - 1];
+
+                        // Find a connected vertex that's in our face but not yet used
+                        foreach (var edge in _currentPolyhedronData.Edges)
+                        {
+                            int v1 = edge[0], v2 = edge[1];
+                            int connected = -1;
+                            if (v1 == currentVertex && faceSet.Contains(v2)) connected = v2;
+                            else if (v2 == currentVertex && faceSet.Contains(v1)) connected = v1;
+
+                            if (connected >= 0)
+                            {
+                                // Check if this vertex is in our sorted list and not used
+                                for (int j = 0; j < n; j++)
+                                {
+                                    if (!used[j] && sorted[j] == connected)
+                                    {
+                                        nextVertex = j;
+                                        break;
+                                    }
+                                }
+                                if (nextVertex >= 0) break;
+                            }
+                        }
+
+                        if (nextVertex >= 0)
+                        {
+                            perimeterOrder[i] = sorted[nextVertex];
+                            used[nextVertex] = true;
+                        }
+                        else
+                        {
+                            // Fallback: find any unused vertex
+                            for (int j = 0; j < n; j++)
+                            {
+                                if (!used[j])
+                                {
+                                    perimeterOrder[i] = sorted[j];
+                                    used[j] = true;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+
+                    log($"  Perimeter order: [{string.Join(",", perimeterOrder)}]");
+
+                    // Update sorted to perimeter order for triangulation
+                    for (int i = 0; i < n; i++)
+                        sorted[i] = perimeterOrder[i];
+                    for (int i = 0; i < n; i++)
+                        sorted3D[i] = _currentPolyhedronData.Vertices[sorted[i]];
+
+                    // Build reverse lookup: vertexIndex -> position in perimeter order [0..n-1]
+                    var vertexToPos = new Dictionary<int, int>();
+                    for (int i = 0; i < n; i++)
+                        vertexToPos[sorted[i]] = i;
+
+                    // Get fill rule strategy from the current ComboBox selection
+                    IFillRuleStrategy triangulationRule = GetCurrentFillRule();
+
+                    log("  TriangulationRule: polyhedron=" + _currentPolyhedronIndex + " using '" + triangulationRule.Name + "'");
+
+                    // Use the triangulation rule to triangulate.
+                    var triangles = triangulationRule.Triangulate(sorted, sorted3D, centroid, nx, ny, nz, log);
+                    int centroidPos = n; // position index for centroid in the mesh
+
+                    // Normalize all triangle indices to position indices [0..n] where n = centroid
+                    var normalizedTriangles = new List<int[]>();
+                    foreach (var tri in triangles)
+                    {
+                        int i0 = NormalizeIndex(tri[0], n, sorted, vertexToPos);
+                        int i1 = NormalizeIndex(tri[1], n, sorted, vertexToPos);
+                        int i2 = NormalizeIndex(tri[2], n, sorted, vertexToPos);
+                        normalizedTriangles.Add(new[] { i0, i1, i2 });
+                    }
+
+                    log($"  Triangulation: {normalizedTriangles.Count} triangles");
+
+                    // Create mesh — face vertices at positions [0..n-1], centroid at position [n]
+                    var mesh = new MeshGeometry3D();
+                    for (int i = 0; i < n; i++)
+                        mesh.Positions.Add(ApplyBoxTransform(sorted3D[i]));
+                    mesh.Positions.Add(ApplyBoxTransform(centroid)); // index n
+
+                    foreach (var tri in normalizedTriangles)
+                    {
+                        int i0 = tri[0], i1 = tri[1], i2 = tri[2];
 
                         int baseIndex = mesh.Positions.Count;
-                        mesh.Positions.Add(v0);
-                        mesh.Positions.Add(v1);
-                        mesh.Positions.Add(v2);
+                        mesh.Positions.Add(mesh.Positions[i0]);
+                        mesh.Positions.Add(mesh.Positions[i1]);
+                        mesh.Positions.Add(mesh.Positions[i2]);
                         mesh.TriangleIndices.Add(baseIndex);
                         mesh.TriangleIndices.Add(baseIndex + 1);
                         mesh.TriangleIndices.Add(baseIndex + 2);
@@ -522,6 +709,10 @@ public partial class MainWindow : Window
         _textPitch = _textYaw = _textRoll = 0;
         _textAngularPitch = 0.2; _textAngularYaw = 0.15; _textAngularRoll = 0.1;
 
+        // Reset additive slider bases
+        _sceneSliderBaseX = _sceneSliderBaseY = _sceneSliderBaseZ = 0;
+        _sceneRotationBasePitch = _sceneRotationBaseYaw = _sceneRotationBaseRoll = 0;
+
         UpdateVisuals();
     }
 
@@ -580,6 +771,14 @@ public partial class MainWindow : Window
         _currentPolyhedronIndex = (int)PolyhedronSlider.Value;
         _currentPolyhedronData = PolyhedronLibrary.GetPolyhedron(_currentPolyhedronIndex);
         PolyhedronLabel.Content = $"Polyhedron: {_currentPolyhedronData.Name}";
+
+        // Reset fill rule to Fan from Centroid when switching polyhedron
+        if (FillRuleCombo != null)
+            FillRuleCombo.SelectedIndex = 0;
+
+        // Set the global edge getter for NeighborFan strategy
+        NeighborFanStrategy.SetEdgeGetter(() => _currentPolyhedronData?.Edges ?? Array.Empty<int[]>());
+
         UpdateVisuals();
     }
 
@@ -663,32 +862,51 @@ public partial class MainWindow : Window
     private void OnScenePositionChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
     {
         if (TextPosXLabel == null) return;
-        double x = TextPosXSlider.Value / 100.0;
-        double y = TextPosYSlider.Value / 100.0;
-        double z = TextPosZSlider.Value / 100.0;
 
-        TextPosXLabel.Content = $"Box Pos X: {x:F2}";
-        TextPosYLabel.Content = $"Box Pos Y: {y:F2}";
-        TextPosZLabel.Content = $"Box Pos Z: {z:F2}";
+        double sliderX = TextPosXSlider.Value / 100.0;
+        double sliderY = TextPosYSlider.Value / 100.0;
+        double sliderZ = TextPosZSlider.Value / 100.0;
 
-        _boxOffset = new Vector3D(x, y, z);
-        _boxVelocity = new Vector3D(0, 0, 0);
+        TextPosXLabel.Content = $"Box Pos X: {sliderX:F2}";
+        TextPosYLabel.Content = $"Box Pos Y: {sliderY:F2}";
+        TextPosZLabel.Content = $"Box Pos Z: {sliderZ:F2}";
+
+        // Compute delta from base and apply additively to current offset
+        double deltaX = sliderX - _sceneSliderBaseX;
+        double deltaY = sliderY - _sceneSliderBaseY;
+        double deltaZ = sliderZ - _sceneSliderBaseZ;
+
+        _boxOffset = new Vector3D(_boxOffset.X + deltaX, _boxOffset.Y + deltaY, _boxOffset.Z + deltaZ);
+
+        // Update the base positions so future deltas are incremental from here
+        _sceneSliderBaseX = sliderX;
+        _sceneSliderBaseY = sliderY;
+        _sceneSliderBaseZ = sliderZ;
     }
 
     private void OnSceneRotationChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
     {
         if (TextPitchLabel == null) return;
-        double pitch = TextPitchSlider.Value;
-        double roll = TextRollSlider.Value;
-        double yaw = TextYawSlider.Value;
 
-        TextPitchLabel.Content = $"Box Pitch: {pitch:F0}°";
-        TextRollLabel.Content = $"Box Roll: {roll:F0}°";
-        TextYawLabel.Content = $"Box Yaw: {yaw:F0}°";
+        double sliderPitch = TextPitchSlider.Value;
+        double sliderRoll = TextRollSlider.Value;
+        double sliderYaw = TextYawSlider.Value;
 
-        _boxPitch = pitch;
-        _boxRoll = roll;
-        _boxYaw = yaw;
+        TextPitchLabel.Content = $"Box Pitch: {sliderPitch:F0}°";
+        TextRollLabel.Content = $"Box Roll: {sliderRoll:F0}°";
+        TextYawLabel.Content = $"Box Yaw: {sliderYaw:F0}°";
+
+        // Compute delta from base and apply additively to current rotation
+        _boxPitch += sliderPitch - _sceneRotationBasePitch;
+        _boxRoll += sliderRoll - _sceneRotationBaseRoll;
+        _boxYaw += sliderYaw - _sceneRotationBaseYaw;
+
+        // Update the base positions so future deltas are incremental
+        _sceneRotationBasePitch = sliderPitch;
+        _sceneRotationBaseRoll = sliderRoll;
+        _sceneRotationBaseYaw = sliderYaw;
+
+        // Stop auto-rotation while user is adjusting manually
         _angularPitch = _angularYaw = _angularRoll = 0;
     }
 
@@ -698,5 +916,55 @@ public partial class MainWindow : Window
         _currentTextBitmap?.Dispose();
         _textRasterizer?.Dispose();
         base.OnClosed(e);
+    }
+
+    // --- Fill Rule Framework ---
+
+    /// <summary>
+    /// Get the fill rule strategy from the current ComboBox selection.
+    /// Rules always reset to "Fan from Centroid" when switching polyhedra.
+    /// </summary>
+    private IFillRuleStrategy GetCurrentFillRule()
+    {
+        if (FillRuleCombo == null) return FillRuleConfig.Strategies["Fan from Centroid"];
+        var item = FillRuleCombo.SelectedItem as ComboBoxItem;
+        string name = item?.Content as string ?? "Fan from Centroid";
+        return FillRuleConfig.Strategies.TryGetValue(name, out var s) ? s : FillRuleConfig.Strategies["Fan from Centroid"];
+    }
+
+    private void OnFillRuleChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (FillRuleCombo == null) return;
+        if (FillRuleDesc == null) return;
+
+        var item = FillRuleCombo.SelectedItem as ComboBoxItem;
+        if (item == null) return;
+
+        string selectedName = item.Content as string ?? "Fan from Centroid";
+
+        // Update description
+        if (FillRuleConfig.Strategies.TryGetValue(selectedName, out var strategy))
+            FillRuleDesc.Text = strategy.Description;
+
+        // Always update visuals immediately for live preview
+        UpdateVisuals();
+    }
+
+    /// <summary>
+    /// Normalize a triangle index to a face-vertex position [0..n-1] or centroid [n].
+    /// Strategy returns indices which may be:
+    ///   - Fan strategy: position index [0..n-1] or [n] for centroid
+    ///   - EarClip strategy: actual vertex indices from sorted[], so we convert via vertexToPos
+    /// </summary>
+    private int NormalizeIndex(int idx, int n, int[] sorted, Dictionary<int, int> vertexToPos)
+    {
+        // If it's the centroid sentinel (n), return n
+        if (idx == n) return n;
+        // Otherwise, if it looks like a position index (0..n-1), return as-is
+        if (idx >= 0 && idx < n) return idx;
+        // Otherwise it's an actual vertex index — look it up in vertexToPos
+        if (vertexToPos.TryGetValue(idx, out int pos))
+            return pos;
+        return idx; // fallback
     }
 }

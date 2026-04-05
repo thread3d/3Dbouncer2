@@ -55,7 +55,6 @@
                             <RadioButton x:Name="WireframeOnlyRadio"
                                         Content="Wireframe Only"
                                         Foreground="White"
-                                        IsChecked="True"
                                         Checked="OnTransparencyModeChanged"
                                         Margin="0,5,0,0"/>
                             <RadioButton x:Name="FaceTransparencyRadio"
@@ -66,8 +65,43 @@
                             <RadioButton x:Name="WholeTransparencyRadio"
                                         Content="Whole Polyhedron"
                                         Foreground="White"
+                                        IsChecked="True"
                                         Checked="OnTransparencyModeChanged"
                                         Margin="0,5,0,0"/>
+                        </StackPanel>
+                    </GroupBox>
+
+                    <!-- Fill rule mode -->
+                    <GroupBox Header="Fill Rule" Foreground="White" Margin="0,0,0,10">
+                        <StackPanel>
+                            <ComboBox x:Name="FillRuleCombo"
+                                      Height="24"
+                                      Margin="0,5,0,5"
+                                      SelectionChanged="OnFillRuleChanged"
+                                      HorizontalContentAlignment="Left">
+                                <ComboBoxItem Content="Fan from Centroid" IsSelected="True"/>
+                                <ComboBoxItem Content="Ear Clipping (Even-Odd)"/>
+                                <ComboBoxItem Content="Convex Hull (Non-Zero)"/>
+                                <ComboBoxItem Content="Fan from Vertex 0"/>
+                                <ComboBoxItem Content="Strip Partition"/>
+                                <ComboBoxItem Content="Neighbor Fan"/>
+                                <ComboBoxItem Content="Kirkpatrick Fan"/>
+                                <ComboBoxItem Content="Monotone Partition"/>
+                                <ComboBoxItem Content="Minimum Diagonal"/>
+                                <ComboBoxItem Content="Alternating Fan"/>
+                                <ComboBoxItem Content="Dial (Min Angle)"/>
+                                <ComboBoxItem Content="Star Bipartition"/>
+                            </ComboBox>
+                            <TextBlock x:Name="FillRuleDesc"
+                                       Text="Simple fan from centroid - fast but only correct for convex faces"
+                                       Foreground="LightGray"
+                                       FontSize="10"
+                                       TextWrapping="Wrap"
+                                       Margin="0,0,0,5"/>
+                            <TextBlock Text="Rule resets when switching polyhedron"
+                                       Foreground="Gray"
+                                       FontSize="9"
+                                       Margin="0,0,0,5"/>
                         </StackPanel>
                     </GroupBox>
 
