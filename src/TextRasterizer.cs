@@ -23,12 +23,13 @@ public class TextRasterizer : IDisposable
         if (string.IsNullOrEmpty(text))
             return Vector2.Zero;
 
-        using var paint = new SKPaint();
-        paint.TextSize = DefaultFontSize;
-        paint.Typeface = SKTypeface.FromFamilyName(DefaultFontFamily);
-        paint.IsAntialias = true;
+        using var font = new SKFont
+        {
+            Size = DefaultFontSize,
+            Typeface = SKTypeface.FromFamilyName(DefaultFontFamily)
+        };
 
-        float width = paint.MeasureText(text);
+        float width = font.MeasureText(text);
         // Use a reasonable height based on font size
         float height = DefaultFontSize * 1.5f;
 
@@ -79,21 +80,24 @@ public class TextRasterizer : IDisposable
 
             // Setup paint with anti-aliasing enabled (CRITICAL for smooth edges)
             using (var paint = new SKPaint())
+            using (var font = new SKFont
+            {
+                Size = DefaultFontSize,
+                Typeface = SKTypeface.FromFamilyName(DefaultFontFamily)
+            })
             {
                 paint.IsAntialias = true;
                 paint.Color = textColor;
-                paint.TextSize = DefaultFontSize;
-                paint.Typeface = SKTypeface.FromFamilyName(DefaultFontFamily);
-                paint.TextAlign = SKTextAlign.Center;
 
                 // Calculate text position (centered)
                 float x = width / 2f;
                 // Measure text for vertical centering
-                SKRect textBounds = new SKRect();
-                paint.MeasureText(text, ref textBounds);
-                float y = (height + textBounds.Height) / 2f;
+                float textWidth = font.MeasureText(text);
+                // Approximate height based on font size
+                float textHeight = DefaultFontSize;
+                float y = (height + textHeight) / 2f;
 
-                canvas.DrawText(text, x, y, paint);
+                canvas.DrawText(text, x, y, font, paint);
             }
         }
 
