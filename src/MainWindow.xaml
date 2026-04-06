@@ -15,7 +15,8 @@
                              Text="Hello"
                              FontSize="14"
                              Padding="5"
-                             Margin="0,5,0,10"/>
+                             Margin="0,5,0,10"
+                             Width="380"/>
 
                     <!-- Color picker -->
                     <Button x:Name="ColorButton"

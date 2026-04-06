@@ -23,15 +23,24 @@ public class TextRasterizer : IDisposable
         if (string.IsNullOrEmpty(text))
             return Vector2.Zero;
 
-        using var font = new SKFont
+        using var paint = new SKPaint
         {
-            Size = DefaultFontSize,
+            IsAntialias = true,
+            TextSize = DefaultFontSize,
             Typeface = SKTypeface.FromFamilyName(DefaultFontFamily)
         };
 
-        float width = font.MeasureText(text);
-        // Use a reasonable height based on font size
-        float height = DefaultFontSize * 1.5f;
+        // Get the actual bounding box - this includes full glyph extents
+        var bounds = new SKRect();
+        paint.MeasureText(text, ref bounds);
+
+        // Width must include the full glyph bounds
+        float width = bounds.Width;
+        // Height includes ascent and descent
+        float height = Math.Max(Math.Abs(bounds.Top) + Math.Abs(bounds.Bottom), DefaultFontSize);
+
+        // Ensure minimum dimensions
+        width = Math.Max(width, 10f);
 
         return new Vector2(width, height);
     }
@@ -79,26 +88,27 @@ public class TextRasterizer : IDisposable
             canvas.Clear(SKColors.Transparent);
 
             // Setup paint with anti-aliasing enabled (CRITICAL for smooth edges)
-            using (var paint = new SKPaint())
-            using (var font = new SKFont
+            using var paint = new SKPaint
             {
-                Size = DefaultFontSize,
+                IsAntialias = true,
+                Color = textColor,
+                TextSize = DefaultFontSize,
                 Typeface = SKTypeface.FromFamilyName(DefaultFontFamily)
-            })
-            {
-                paint.IsAntialias = true;
-                paint.Color = textColor;
+            };
 
-                // Calculate text position (centered)
-                float x = width / 2f;
-                // Measure text for vertical centering
-                float textWidth = font.MeasureText(text);
-                // Approximate height based on font size
-                float textHeight = DefaultFontSize;
-                float y = (height + textHeight) / 2f;
+            // Measure text for proper centering
+            var bounds = new SKRect();
+            paint.MeasureText(text, ref bounds);
 
-                canvas.DrawText(text, x, y, font, paint);
-            }
+            // Calculate text position (centered in bitmap)
+            // bounds.Width gives full glyph width, bounds.Left is typically 0 or negative
+            float textWidth = bounds.Width;
+            float x = (width - textWidth) / 2f;
+            // Vertical: center in bitmap, adjusting for baseline
+            // bounds.Top is negative (above baseline), so subtract it to get proper baseline
+            float y = (height + Math.Abs(bounds.Top) + Math.Abs(bounds.Bottom)) / 2f;
+
+            canvas.DrawText(text, x, y, paint);
         }
 
         return bitmap;
