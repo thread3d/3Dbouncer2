@@ -1,22 +1,26 @@
 # 3D Text Bouncer
 
-A Windows desktop application that renders text as a physically-simulated 3D particle cloud bouncing inside a semi-transparent box. Built with OpenTK and .NET 8.
+A Windows desktop application that renders text as a physically-simulated 3D particle cloud bouncing inside a translucent polyhedron. Built with WPF, HelixToolkit.Wpf, and .NET 8.
 
 ![.NET 8](https://img.shields.io/badge/.NET-8.0-blue)
-![OpenTK 4.9.4](https://img.shields.io/badge/OpenTK-4.9.4-green)
+![HelixToolkit](https://img.shields.io/badge/HelixToolkit.Wpf-2.24.0-green)
 ![Status](https://img.shields.io/badge/status-Phase%205%20of%206-yellow)
 
 ## Features
 
-- **Text-to-Particles** — Convert any text into a 3D particle cloud with proper hole detection (letters like O, P, Q, 0, 9 remain hollow)
-- **Real-time Physics** — Elastic collision with box boundaries using a fixed timestep for stable, frame-rate independent simulation
-- **Interactive Camera** — Orbit (left-drag), zoom (scroll), and pan (right-drag) around the particle cloud
+- **Text-to-Particles** — Convert any text into a 3D particle cloud using SkiaSharp rasterization with scanline even-odd hole detection (letters like O, P, Q, 0, 9 remain hollow)
+- **Physics Simulation** — Fixed-timestep elastic collision with letter boundary constraints, keeping particles inside text shapes
+- **Polyhedron Container** — Choose from multiple polyhedra (cube, tetrahedron, octahedron, dodecahedron, icosahedron, etc.) as the bouncing container
+- **Transparency Modes** — Render face-only, whole polyhedron, or wireframe-only with adjustable opacity
+- **18 Fill Rules** — Configurable polygon triangulation and 3D rendering strategies:
+  - 2D Triangulation: Fan from Centroid, Ear Clipping, Convex Hull, Strip Partition, Kirkpatrick, Monotone Partition, and more
+  - 3D Rendering: Painter Back-to-Front, Backface Culling, Normal Angle Shading, Distance Fog, Emissive Glow, Spectral Coloring
 - **Control Modes**
   - *Automatic* — Physics drives particle motion
-  - *Manual* — Override position and rotation via sliders
-  - *Mixture* — Apply user input as forces to the physics simulation
-- **Live Parameter Adjustment** — Particle count (1K–100K), particle size, text color, physics parameters
-- **100K Particles at 60 FPS** — GPU-efficient instanced rendering via OpenGL
+  - *Manual* — Override box position and rotation via sliders
+  - *Mixture* — User input applies forces to physics
+- **Live Parameter Adjustment** — Particle count (1K–100K), text color, box opacity, polyhedron selection
+- **Additive Slider System** — Position/rotation sliders accumulate deltas rather than setting absolute values, allowing continuous adjustment
 
 ## Screenshots
 
@@ -46,13 +50,35 @@ dotnet test
 
 ```
 src/
-├── FillRules/          # Polygon triangulation strategies (ear clipping, Hertel-Mehlhorn, etc.)
-├── PhysicsSimulator.cs  # Fixed-timestep elastic collision physics
-├── ParticleData.cs      # Particle struct (position, velocity, color)
-├── ParticleGenerator.cs  # Bitmap sampling with scanline hole detection
-├── TextRasterizer.cs    # SkiaSharp text-to-bitmap rasterization
-├── MainWindow.xaml.cs   # OpenGL rendering loop and WinForms UI
-└── ControlMode.cs       # Automatic / Manual / Mixture modes
+├── FillRules/
+│   ├── AlternatingFanStrategy.cs      # Alternating fan triangulation
+│   ├── AlternatingOpacityRule.cs      # Alternating face opacity (3D)
+│   ├── BackfaceCullingRule.cs         # Cull back-facing faces (3D)
+│   ├── ConvexHullStrategy.cs          # Convex hull triangulation
+│   ├── DialStrategy.cs                # Minimum diagonal angle
+│   ├── DistanceFogRule.cs             # Depth-based fog (3D)
+│   ├── EarClipTriangulationStrategy.cs # Ear clipping triangulation
+│   ├── EmissiveGlowRule.cs            # Emissive glow effect (3D)
+│   ├── FanFromVertexStrategy.cs       # Fan from first vertex
+│   ├── FanTriangulationStrategy.cs    # Fan from face centroid
+│   ├── FillRuleConfig.cs              # Strategy registry and presets
+│   ├── HertelMehlhornStrategy.cs      # Hertel-Mehlhorn approximation
+│   ├── IFillRuleStrategy.cs           # Strategy interface
+│   ├── KirkpatrickStrategy.cs         # Kirkpatrick triangulation
+│   ├── MinimumDiagonalStrategy.cs     # Minimum diagonal selection
+│   ├── MonotonePartitionStrategy.cs   # Monotone partition
+│   ├── NeighborFanStrategy.cs         # Fan from neighboring faces
+│   ├── NormalAngleShadingRule.cs      # Normal-based shading (3D)
+│   ├── PainterBackToFrontRule.cs      # Painter's algorithm (3D)
+│   ├── SpectralColoringRule.cs        # Spectral coloring (3D)
+│   └── WireframeOverlayRule.cs       # Wireframe overlay (3D)
+├── PolyhedronData.cs           # Polyhedron vertices, edges, faces
+├── ParticleData.cs             # Particle struct (position, velocity, color, 48 bytes)
+├── ParticleGenerator.cs        # Bitmap sampling with scanline even-odd hole detection
+├── PhysicsSimulator.cs        # Fixed-timestep elastic collision physics
+├── TextRasterizer.cs          # SkiaSharp text-to-bitmap rasterization
+├── MainWindow.xaml.cs         # WPF 3D viewport, rendering loop, UI event handlers
+└── ControlMode.cs             # Automatic / Manual / Mixture modes
 ```
 
 ## Tech Stack
@@ -60,20 +86,21 @@ src/
 | Component | Technology |
 |-----------|------------|
 | Runtime | .NET 8 LTS |
-| 3D Rendering | OpenTK 4.9.4 (OpenGL 4.6) |
-| UI Framework | WinForms |
+| 3D Rendering | HelixToolkit.Wpf 2.24.0 (WPF 3D viewport) |
+| Math / Particles | OpenTK.Mathematics 4.9.4 |
+| UI Framework | WPF |
 | Text Rasterization | SkiaSharp 3.119.2 |
-| Math Library | OpenTK.Mathematics |
+| Physics | Custom fixed-timestep accumulator pattern |
 
 ## Roadmap
 
 | Phase | Status | Description |
 |-------|--------|-------------|
-| 1. Foundation | ✅ | OpenTK GLControl, basic rendering pipeline |
-| 2. Text-to-Particles | ✅ | SkiaSharp rasterization, hole detection, particle distribution |
-| 3. Particle Rendering | ✅ | Instanced rendering, 100K particles at 60 FPS |
-| 4. Physics Simulation | ✅ | Elastic collision, fixed timestep |
-| 5. UI Integration | 🔄 | Camera controls, side panel, sliders |
+| 1. Foundation | ✅ | WPF HelixToolkit viewport, basic 3D rendering pipeline |
+| 2. Text-to-Particles | ✅ | SkiaSharp rasterization, scanline hole detection, particle distribution |
+| 3. Particle Rendering | ✅ | Point cloud rendering via HelixToolkit, 100K particles |
+| 4. Physics Simulation | ✅ | Fixed-timestep elastic collision, letter boundary constraints |
+| 5. UI Integration | ✅ | Camera controls, side panel, sliders, polyhedron selection, fill rules |
 | 6. Mixture Mode & Polish | ⏳ | Hybrid physics/manual interaction, polish |
 
 ## License
