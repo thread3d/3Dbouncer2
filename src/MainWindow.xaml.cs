@@ -599,8 +599,10 @@ public partial class MainWindow : Window
 
                     // Normalize all triangle indices to position indices [0..n] where n = centroid
                     var normalizedTriangles = new List<int[]>();
+                    if (triangles is not null)
                     foreach (var tri in triangles)
                     {
+                        if (tri is null) continue;
                         int i0 = NormalizeIndex(tri[0], n, sorted, vertexToPos);
                         int i1 = NormalizeIndex(tri[1], n, sorted, vertexToPos);
                         int i2 = NormalizeIndex(tri[2], n, sorted, vertexToPos);
