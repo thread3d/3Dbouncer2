@@ -105,4 +105,4 @@ src/
 
 ## License
 
-MIT
+MIT License - feel free to modify and extend!
