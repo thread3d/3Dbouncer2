@@ -11,6 +11,10 @@ tests/obj/
 
 # Logs
 logs/
+*.log
+
+# Solution file (generated)
+*.sln
 
 # OS
 .DS_Store
@@ -19,5 +23,7 @@ Thumbs.db
 # Planning (generated artifacts)
 .planning/
 
-# Temp
+# Others
+.claude/
+.vs/
 %USERPROFILE%/
