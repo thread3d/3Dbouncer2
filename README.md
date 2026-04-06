@@ -1,6 +1,6 @@
 # 3D Text Bouncer
 
-A Windows desktop application that renders text as a physically-simulated 3D particle cloud bouncing inside a translucent polyhedron. Built with WPF, HelixToolkit.Wpf, and .NET 8.
+A Windows desktop application that renders text as a physically-simulated 3D particle cloud bouncing inside a translucent polyhedron. Built in C# with WPF, OpenTK, HelixToolkit.Wpf, and .NET 8.
 
 ![.NET 8](https://img.shields.io/badge/.NET-8.0-blue)
 ![HelixToolkit](https://img.shields.io/badge/HelixToolkit.Wpf-2.24.0-green)
